@@ -3,37 +3,44 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Happy Family 的生活記事與家庭回憶。">
-  <title>Happy Family｜家庭記事</title>
+  <meta name="description" content="夏熠安的個人網站。文章、作品，以及一些慢慢留下來的東西。">
+  <title>夏熠安｜xiayian505</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="index/xiayian.css">
   <link rel="stylesheet" href="index/xiayian_style.css">
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="./" aria-label="Happy Family 首頁">
-      <span class="brand-mark" aria-hidden="true">HF</span>
-      <span><strong>Happy Family</strong><small>把平凡日子，好好收藏</small></span>
+    <a class="brand" href="./" aria-label="夏熠安首頁">
+      <strong>夏熠安</strong>
+      <small>xiayian505</small>
     </a>
-    <nav class="header-actions" aria-label="管理功能">
-      <span id="admin-badge" class="admin-badge" hidden>管理模式</span>
-      <button id="new-post-button" class="button button-primary" type="button" hidden>新增文章</button>
-      <button id="auth-button" class="button button-quiet" type="button">管理者登入</button>
+    <nav class="header-actions" aria-label="網站功能">
+      <span id="admin-badge" class="admin-badge" hidden>ADMIN</span>
+      <button id="new-post-button" class="button button-primary" type="button" hidden>＋ 寫點東西</button>
+      <button id="auth-button" class="button button-quiet" type="button">登入</button>
     </nav>
   </header>
 
   <main>
-    <section class="hero" aria-labelledby="page-title">
-      <p class="eyebrow">OUR FAMILY JOURNAL</p>
-      <h1 id="page-title">日常很小，回憶很長。</h1>
-      <p>記下那些一起吃飯、散步、旅行，以及值得反覆想起的普通時光。</p>
+    <section class="intro" aria-labelledby="page-title">
+      <p class="intro-kicker">STILLNESS BY SLOWLY</p>
+      <h1 id="page-title">想到什麼，<br>就慢慢留下來。</h1>
+      <p class="intro-copy">這裡是夏熠安的個人頁。作品、文字，還有一些沒有必要分類的東西。</p>
+      <div class="intro-links" aria-label="網站導覽">
+        <a href="https://stillnessbyslowly.com/">慢慢主站 ↗</a>
+        <a href="#writing">往下看文章 ↓</a>
+      </div>
     </section>
 
-    <section class="posts-section" aria-labelledby="posts-title">
+    <section id="writing" class="posts-section" aria-labelledby="posts-title">
       <div class="section-heading">
-        <div><p class="eyebrow">LATEST STORIES</p><h2 id="posts-title">最近的文章</h2></div>
+        <div>
+          <p class="section-number">01</p>
+          <h2 id="posts-title">最近寫的</h2>
+        </div>
         <p id="post-count" class="post-count" aria-live="polite"></p>
       </div>
       <div id="status" class="status" role="status">正在讀取文章…</div>
@@ -41,13 +48,17 @@
     </section>
   </main>
 
-  <footer><span>Happy Family</span><span>珍藏每一個平凡的今天</span></footer>
+  <footer>
+    <span>夏熠安 · xiayian505</span>
+    <span>Stillness by Slowly</span>
+  </footer>
 
   <dialog id="login-dialog" aria-labelledby="login-title">
     <form id="login-form" class="dialog-card">
       <button class="dialog-close" type="button" data-close="login-dialog" aria-label="關閉">×</button>
-      <p class="eyebrow">ADMIN</p><h2 id="login-title">管理者登入</h2>
-      <p class="form-intro">此入口僅供網站管理者使用。</p>
+      <p class="dialog-kicker">ADMIN</p>
+      <h2 id="login-title">登入</h2>
+      <p class="form-intro">管理者入口。</p>
       <label>電子郵件<input id="login-email" type="email" autocomplete="username" required></label>
       <label>密碼<input id="login-password" type="password" autocomplete="current-password" required></label>
       <p id="login-error" class="form-error" role="alert"></p>
@@ -58,13 +69,14 @@
   <dialog id="editor-dialog" aria-labelledby="editor-title">
     <form id="editor-form" class="dialog-card dialog-card-wide">
       <button class="dialog-close" type="button" data-close="editor-dialog" aria-label="關閉">×</button>
-      <p class="eyebrow">EDITOR</p><h2 id="editor-title">新增文章</h2>
+      <p class="dialog-kicker">WRITE</p>
+      <h2 id="editor-title">新增文章</h2>
       <input id="post-id" type="hidden">
       <label>標題<input id="post-title" type="text" maxlength="160" required></label>
       <label>內容<textarea id="post-content" rows="12"></textarea></label>
       <label class="checkbox"><input id="post-published" type="checkbox" checked><span>立即公開</span></label>
       <p id="editor-error" class="form-error" role="alert"></p>
-      <div class="form-actions"><button class="button button-quiet" type="button" data-close="editor-dialog">取消</button><button class="button button-primary" type="submit">儲存文章</button></div>
+      <div class="form-actions"><button class="button button-quiet" type="button" data-close="editor-dialog">取消</button><button class="button button-primary" type="submit">儲存</button></div>
     </form>
   </dialog>
 
