@@ -1,0 +1,8 @@
+@media (max-width:640px) {
+  .site-header { align-items:flex-start; padding:14px 18px; }.brand small,.admin-badge { display:none; }.brand-mark { width:42px; height:42px; }.header-actions { flex-wrap:wrap; justify-content:flex-end; }.button { padding:9px 13px; font-size:.85rem; }
+  .hero { min-height:340px; padding:55px 22px; }.hero h1 { font-size:2.5rem; }
+  .posts-section { padding:52px 18px 75px; }.post-card { padding:25px 22px; }.section-heading { align-items:flex-start; gap:10px; }.post-count { padding-top:10px; }
+  footer { flex-direction:column; align-items:flex-start; padding:25px 20px; }
+  .dialog-card { padding:30px 22px 24px; }
+}
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; } }
