@@ -45,20 +45,28 @@
     elements.posts.replaceChildren();
     elements.status.hidden = posts.length > 0;
     if (!posts.length) { elements.status.textContent = "目前還沒有文章。"; elements.status.classList.remove("error"); }
-    elements["post-count"].textContent = posts.length ? `${posts.length} 篇文章` : "";
+    elements["post-count"].textContent = posts.length ? `1 / ${Math.max(1, Math.ceil(posts.length / 5))}` : "";
     posts.forEach(function (post) {
       const article = document.createElement("article"); article.className = "post-card";
       const meta = document.createElement("div"); meta.className = "post-meta";
       const time = document.createElement("time"); time.dateTime = post.created_at; time.textContent = formatDate(post.created_at); meta.append(time);
       if (!post.published) { const badge = document.createElement("span"); badge.className = "draft"; badge.textContent = "草稿"; meta.append(badge); }
+      const heading = document.createElement("div"); heading.className = "post-heading";
       const title = document.createElement("h3"); title.textContent = post.title;
+      const toggle = document.createElement("button"); toggle.className = "post-toggle"; toggle.type = "button"; toggle.textContent = "›"; toggle.setAttribute("aria-label", `展開「${post.title}」內文`); toggle.setAttribute("aria-expanded", "false");
+      const details = document.createElement("div"); details.className = "post-details";
       const content = document.createElement("div"); content.className = "post-content"; content.textContent = post.content;
-      article.append(meta, title, content);
+      heading.append(title, toggle); details.append(meta, content); article.append(heading, details);
+      toggle.addEventListener("click", function () {
+        const open = article.classList.toggle("is-open");
+        toggle.setAttribute("aria-expanded", String(open));
+        toggle.setAttribute("aria-label", `${open ? "收合" : "展開"}「${post.title}」內文`);
+      });
       if (isAdmin()) {
         const actions = document.createElement("div"); actions.className = "post-actions";
         const edit = document.createElement("button"); edit.className = "button button-quiet"; edit.type = "button"; edit.textContent = "編輯"; edit.addEventListener("click", function () { openEditor(post); });
         const remove = document.createElement("button"); remove.className = "button button-quiet"; remove.type = "button"; remove.textContent = "刪除"; remove.addEventListener("click", function () { deletePost(post); });
-        actions.append(edit, remove); article.append(actions);
+        actions.append(edit, remove); details.append(actions);
       }
       elements.posts.append(article);
     });
@@ -85,7 +93,7 @@
   function updateAuthUI() {
     const admin = isAdmin();
     elements["new-post-button"].hidden = !admin; elements["admin-badge"].hidden = !admin;
-    elements["auth-button"].textContent = admin ? "登出" : "管理者登入";
+    elements["auth-button"].textContent = admin ? "再會" : "歡迎";
     render();
   }
 
