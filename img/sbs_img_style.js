@@ -1,4 +1,4 @@
-/* SBS IMG｜頁面互動：四分頁、右上角管理與 R2 管理 API。 */
+/* SBS IMG｜頁面互動：五分頁、右上角管理與 R2 管理 API。 */
 (function (global) {
   "use strict";
   const $ = id => document.getElementById(id);
@@ -56,10 +56,10 @@
       while (value >= 1000 && unit < names.length - 1) { value /= 1000; unit++; }
       return `${value.toLocaleString("zh-TW", { maximumFractionDigits: 2 })} ${names[unit]}`;
     }
-    function usageOperationRow(value, max, countId, barId, limitId) {
+    function usageOperationRow(value, max, countId, barId, limitId, partial = false) {
       const valid = Number.isSafeInteger(value) && value >= 0;
-      $(countId).textContent = valid ? value.toLocaleString("zh-TW") : "—";
-      $(limitId).textContent = valid ? `${Math.min(100, value / max * 100).toFixed(1)}% / ${max.toLocaleString("zh-TW")}` : "未取得";
+      $(countId).textContent = valid ? `${partial ? "≥ " : ""}${value.toLocaleString("zh-TW")}` : "—";
+      $(limitId).textContent = valid ? `${partial ? "已分類 ≥ " : ""}${Math.min(100, value / max * 100).toFixed(1)}% / ${max.toLocaleString("zh-TW")}` : "未取得";
       $(barId).style.width = valid ? `${Math.min(100, value / max * 100)}%` : "0%";
       $(barId).classList.toggle("usage-near", valid && value >= max * .8);
       $(barId).classList.toggle("usage-over", valid && value >= max);
@@ -75,6 +75,7 @@
       const warnings = [];
       let capacityOkay = false;
       let operationsOkay = false;
+      let operationsPartial = false;
       try {
         try {
           const totals = await app.getBucketUsage(({ pages }) => {
@@ -102,25 +103,67 @@
           $("usagePeriod").textContent = period?.start ?
             `操作統計：${period.start.slice(0, 10).replaceAll("-", "/")} 起（UTC）｜非正式帳單` : "";
           const ready = result.status === "ok";
-          usageOperationRow(ready ? result.classA : null, 1_000_000,
-            "usageClassA", "usageClassABar", "usageClassALimit");
-          usageOperationRow(ready ? result.classB : null, 10_000_000,
-            "usageClassB", "usageClassBBar", "usageClassBLimit");
+          const partial = result.status === "partial";
+          const knownA = partial ? result.knownClassA : result.classA;
+          const knownB = partial ? result.knownClassB : result.classB;
+          usageOperationRow(ready || partial ? knownA : null, 1_000_000,
+            "usageClassA", "usageClassABar", "usageClassALimit", partial);
+          usageOperationRow(ready || partial ? knownB : null, 10_000_000,
+            "usageClassB", "usageClassBBar", "usageClassBLimit", partial);
           if (ready) {
             operationsOkay = true;
             if (result.classA >= 800_000) warnings.push("A 類操作已達免費額度的 80% 以上。");
             if (result.classB >= 8_000_000) warnings.push("B 類操作已達免費額度的 80% 以上。");
+          } else if (partial) {
+            operationsPartial = true;
+            const names = Array.isArray(result.unknownActions) ? result.unknownActions
+              .filter(name => typeof name === "string" && name.trim())
+              .slice(0, 10).map(name => name.slice(0, 80)) : [];
+            const count = Number.isSafeInteger(result.unknownCount) && result.unknownCount >= 0
+              ? result.unknownCount : null;
+            const description = count === null ? "次數未知" : `共 ${count.toLocaleString("zh-TW")} 次`;
+            warnings.push(`操作統計部分完成：A／B 類僅顯示已分類次數；另有未分類操作（${description}）${names.length ? `：${names.join("、")}` : ""}。尚不能據此判斷本期是否超額。`);
+            if (Number.isSafeInteger(knownA) && knownA >= 800_000) warnings.push("已分類 A 類操作達免費額度 80% 以上。");
+            if (Number.isSafeInteger(knownB) && knownB >= 8_000_000) warnings.push("已分類 B 類操作達免費額度 80% 以上。");
+            if (count !== null && Number.isSafeInteger(knownA) && Number.isSafeInteger(knownB)) {
+              if (knownA < 800_000 && knownA + count >= 800_000) warnings.push("若未分類操作計入 A 類，可能已達免費額度 80%。");
+              if (knownB < 8_000_000 && knownB + count >= 8_000_000) warnings.push("若未分類操作計入 B 類，可能已達免費額度 80%。");
+            }
           } else if (result.status === "not-configured") {
-            warnings.push("操作統計尚未接 Cloudflare Analytics；無法判斷本期是否超額。");
+            const missing = Array.isArray(result.missingConfig) ? result.missingConfig
+              .filter(name => name === "CF_ACCOUNT_ID" || name === "CF_ANALYTICS_TOKEN") : [];
+            warnings.push(missing.length
+              ? `操作統計未接通：Pages 後端讀不到 ${missing.join("、")}。請確認設定已套用到目前的正式部署。`
+              : "操作統計尚未接 Cloudflare Analytics；請確認 Pages 正式環境的變數。");
+          } else if (result.status === "configuration-error") {
+            warnings.push("操作統計未接通：CF_ACCOUNT_ID 格式不正確，請確認填的是 Cloudflare Account ID。");
+          } else if (result.status === "upstream-error") {
+            const code = Number.isInteger(result.httpStatus) && result.httpStatus >= 300 && result.httpStatus <= 599
+              ? `（HTTP ${result.httpStatus}）` : "";
+            const reason = ({ "http-error": "Cloudflare API 回應失敗", "graphql-error": "Cloudflare GraphQL 查詢失敗",
+              "missing-data": "Cloudflare 沒有回傳 R2 操作清單", "request-failed": "Cloudflare API 連線或回應處理失敗" })[result.diagnostic]
+              || "Cloudflare Analytics 查詢失敗";
+            warnings.push(`操作統計未接通：${reason}${code}。沒有足夠資料判斷是否超額。`);
+          } else if (result.status === "incomplete") {
+            // 手機也能直接看到後端回傳的非敏感診斷；不顯示 Token、帳戶 ID 或請求標頭。
+            const unknown = Array.isArray(result.unknownActions) ? result.unknownActions
+              .filter(value => typeof value === "string" && value.trim())
+              .slice(0, 10).map(value => value.slice(0, 80)) : [];
+            const reason = unknown.length
+              ? `尚未分類的 R2 操作：${unknown.join("、")}`
+              : "後端未提供操作名稱（可能是統計群組過多或數字格式異常）";
+            warnings.push(`操作統計資料不完整：${reason}。A／B 數字暫不顯示，避免低估。`);
           } else {
-            warnings.push("操作統計資料未取得或不完整；請直接查看 Cloudflare 帳單。");
+            const status = String(result.status || "unknown").replace(/[^a-z0-9-]/gi, "").slice(0, 40);
+            warnings.push(`操作統計資料未取得（狀態：${status || "unknown"}）；請直接查看 Cloudflare 帳單。`);
           }
         } catch (error) {
           if (ticket !== usageRequestId) return;
           warnings.push(`操作統計失敗：${error.message}`);
         }
         if (ticket !== usageRequestId) return;
-        $("usageStatus").textContent = capacityOkay && operationsOkay ? "統計完成" : "統計未完成";
+        $("usageStatus").textContent = capacityOkay && operationsOkay ? "統計完成"
+          : capacityOkay && operationsPartial ? "統計部分完成" : "統計未完成";
         $("usageWarning").textContent = warnings.join(" ");
         $("usageWarning").hidden = warnings.length === 0;
         usageLoaded = true;
@@ -415,7 +458,7 @@
         setTimeout(() => {
           if (app.isAdmin()) {
             app.refreshImages().catch(error => feedback(`無法載入圖片庫：${error.message}`));
-            if (tabs.current === "settings" && !usageLoaded) loadUsage();
+            if (tabs.current === "stats" && !usageLoaded) loadUsage();
           }
         }, 0);
       } else {
@@ -522,7 +565,7 @@
     $("usageRefresh").addEventListener("click", () => loadUsage());
     tabs.root.addEventListener("slowlytabschange", event => {
       feedback("");
-      if (event.detail?.name === "settings" && !usageLoaded) loadUsage();
+      if (event.detail?.name === "stats" && !usageLoaded) loadUsage();
     });
     app.subscribe(() => renderAll());
 

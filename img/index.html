@@ -36,6 +36,7 @@
 <button aria-selected="true" data-view-target="upload" role="tab" type="button">上傳圖片</button>
 <button aria-selected="false" data-view-target="gallery" role="tab" type="button">圖片庫</button>
 <button aria-selected="false" data-view-target="batch" role="tab" type="button">批次整理</button>
+<button aria-selected="false" data-view-target="stats" role="tab" type="button">統計</button>
 <button aria-selected="false" data-view-target="settings" role="tab" type="button">設定</button>
 </nav>
 <section aria-label="上傳圖片" class="view-panel" data-view-panel="upload">
@@ -115,7 +116,7 @@
 <button class="button button-danger" disabled="" id="batchRemove" type="button">永久刪除</button>
 </div>
 </section>
-<section aria-label="設定" class="view-panel" data-view-panel="settings" hidden="">
+<section aria-label="統計" class="view-panel" data-view-panel="stats" hidden="">
 <div class="usage-heading">
 <h2>R2 用量</h2>
 <button class="button button-quiet button-small" id="usageRefresh" type="button">重新統計</button>
@@ -133,6 +134,9 @@
 <a href="https://dash.cloudflare.com/" rel="noopener noreferrer" target="_blank">Cloudflare 帳單／Email 警告 ↗</a>
 <a href="https://developers.cloudflare.com/billing/manage/budget-alerts/" rel="noopener noreferrer" target="_blank">警告設定步驟 ↗</a>
 </div>
+</section>
+<section aria-label="設定" class="view-panel" data-view-panel="settings" hidden="">
+<h2>設定</h2>
 </section>
 </div>
 <p aria-live="polite" class="feedback" hidden="" id="feedback" role="alert"></p>
