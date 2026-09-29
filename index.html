@@ -87,11 +87,65 @@
       <h2 id="editor-title">新增文章</h2>
       <input id="post-id" type="hidden">
       <label>標題<input id="post-title" type="text" maxlength="160" required></label>
-      <label>內容<textarea id="post-content" rows="12"></textarea></label>
+      <div class="editor-field">
+        <span class="editor-field-title">內容</span>
+        <div class="rich-editor" aria-label="文章編輯器">
+          <div class="rich-mode" role="tablist" aria-label="編輯模式">
+            <button id="editor-visual-tab" type="button" role="tab" aria-controls="post-visual" aria-selected="true">所見即所得</button>
+            <button id="editor-html-tab" type="button" role="tab" aria-controls="post-html" aria-selected="false" tabindex="-1">HTML 原始碼</button>
+          </div>
+          <div id="editor-toolbar" class="rich-toolbar" role="toolbar" aria-label="文章排版工具">
+            <button type="button" data-editor-command="undo" title="復原" aria-label="復原">↶</button>
+            <button type="button" data-editor-command="redo" title="重做" aria-label="重做">↷</button>
+            <span class="rich-toolbar-divider" aria-hidden="true"></span>
+            <button type="button" data-editor-command="formatBlock" data-editor-value="p" title="一般段落">段落</button>
+            <button type="button" data-editor-command="formatBlock" data-editor-value="h2" title="大標題">H2</button>
+            <button type="button" data-editor-command="formatBlock" data-editor-value="h3" title="小標題">H3</button>
+            <span class="rich-toolbar-divider" aria-hidden="true"></span>
+            <button type="button" data-editor-command="bold" title="粗體" aria-label="粗體"><strong>B</strong></button>
+            <button type="button" data-editor-command="italic" title="斜體" aria-label="斜體"><em>I</em></button>
+            <button type="button" data-editor-command="underline" title="底線" aria-label="底線"><u>U</u></button>
+            <button type="button" data-editor-command="insertUnorderedList" title="項目清單" aria-label="項目清單">• 清單</button>
+            <button type="button" data-editor-command="insertOrderedList" title="編號清單" aria-label="編號清單">1. 清單</button>
+            <button id="insert-link-button" type="button" title="插入連結">連結</button>
+            <button id="insert-image-button" type="button" title="貼上圖床圖片網址">插圖</button>
+            <button type="button" data-editor-command="removeFormat" title="清除文字格式">清除格式</button>
+          </div>
+          <div id="post-visual" class="rich-surface" contenteditable="true" role="textbox" aria-multiline="true" aria-label="文章內容" data-placeholder="開始寫你的文章…" spellcheck="true"></div>
+          <textarea id="post-html" class="rich-source" rows="14" aria-label="文章 HTML 原始碼" spellcheck="false" hidden></textarea>
+          <textarea id="post-content" hidden aria-hidden="true" tabindex="-1"></textarea>
+        </div>
+        <p class="editor-help">圖片只接受 HTTPS 圖床直連，不提供上傳；HTML 模式會過濾不安全的標籤及屬性。</p>
+      </div>
       <label>文章分類<select id="post-category" data-slowly-select aria-label="文章分類"><option value="">未分類</option></select></label>
       <label class="checkbox"><input id="post-published" type="checkbox" checked><span>立即公開</span></label>
       <p id="editor-error" class="form-error" role="alert"></p>
       <div class="form-actions"><button class="button button-quiet" type="button" data-close="editor-dialog">取消</button><button class="button button-primary" type="submit">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="image-dialog" class="editor-insert-dialog" aria-labelledby="image-dialog-title">
+    <form id="image-form" class="dialog-card">
+      <button class="dialog-close" type="button" data-close="image-dialog" aria-label="關閉">×</button>
+      <p class="dialog-kicker">IMAGE</p>
+      <h2 id="image-dialog-title">插入圖床圖片</h2>
+      <p class="form-intro">貼上圖片的 HTTPS 直連網址，不會上傳檔案。</p>
+      <label>圖片網址<input id="image-url" type="url" placeholder="https://example.com/image.jpg" inputmode="url" required></label>
+      <label>替代文字（選填）<input id="image-alt" type="text" maxlength="300" placeholder="簡單描述圖片內容"></label>
+      <p id="image-error" class="form-error" role="alert"></p>
+      <div class="form-actions"><button class="button button-quiet" type="button" data-close="image-dialog">取消</button><button class="button button-primary" type="submit">插入圖片</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="link-dialog" class="editor-insert-dialog" aria-labelledby="link-dialog-title">
+    <form id="link-form" class="dialog-card">
+      <button class="dialog-close" type="button" data-close="link-dialog" aria-label="關閉">×</button>
+      <p class="dialog-kicker">LINK</p>
+      <h2 id="link-dialog-title">插入連結</h2>
+      <label>連結網址<input id="link-url" type="url" placeholder="https://example.com/" inputmode="url" required></label>
+      <label>顯示文字（選填）<input id="link-label" type="text" placeholder="未選取文字時，可輸入連結名稱"></label>
+      <p id="link-error" class="form-error" role="alert"></p>
+      <div class="form-actions"><button class="button button-quiet" type="button" data-close="link-dialog">取消</button><button class="button button-primary" type="submit">插入連結</button></div>
     </form>
   </dialog>
 
@@ -130,6 +184,8 @@
   <script src="https://lib.stillnessbyslowly.com/ui/toast.js"></script>
   <script src="https://lib.stillnessbyslowly.com/ui/custom_select.js"></script>
   <script src="https://lib.stillnessbyslowly.com/state/tree_selection.js"></script>
+  <!-- 僅前端安全過濾文章 HTML，固定版本以避免 CDN 無預警變更。 -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js"></script>
   <script src="index/xiayian_style.js"></script>
   <script src="index/xiayian.js"></script>
 </body>

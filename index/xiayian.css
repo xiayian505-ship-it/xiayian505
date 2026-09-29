@@ -147,3 +147,47 @@ input:focus,textarea:focus { outline:3px solid var(--accent); outline-offset:1px
 #editor-dialog .slowly-select-menu { box-shadow:3px 3px 0 var(--ink); }
 #category-dialog .slowly-select-option,
 #editor-dialog .slowly-select-option { border-radius:0; }
+
+/* 文章所見即所得／HTML 雙模式。只影響個人頁，不更動軍火庫樣式。 */
+#editor-dialog { width:min(96vw,900px); max-width:94dvh; overflow-y:auto; }
+#editor-dialog .dialog-card-wide { width:100%; }
+.editor-field { margin:17px 0; }
+.editor-field-title { display:block; margin-bottom:7px; font-size:.85rem; font-weight:700; }
+.rich-editor { min-width:0; border:1px solid var(--ink); background:var(--white); }
+.rich-mode { display:flex; gap:0; border-bottom:1px solid var(--line); background:var(--paper); }
+.rich-mode button { flex:1 1 auto; min-width:0; padding:9px 10px; border:0; border-right:1px solid var(--line); border-radius:0; background:transparent; color:var(--ink); font-size:.81rem; font-weight:600; }
+.rich-mode button:last-child { border-right:0; }
+.rich-mode button[aria-selected="true"] { background:var(--accent-soft); box-shadow:inset 0 -3px var(--ink); }
+.rich-mode button:focus-visible,.rich-toolbar button:focus-visible { outline:2px solid var(--ink); outline-offset:-3px; }
+.rich-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:3px; padding:8px; border-bottom:1px solid var(--line); background:var(--white); }
+.rich-toolbar[hidden],.rich-surface[hidden],.rich-source[hidden] { display:none!important; }
+.rich-toolbar button { min-width:33px; min-height:34px; padding:4px 7px; border:1px solid transparent; border-radius:0; background:transparent; color:var(--ink); font-size:.79rem; line-height:1.3; }
+.rich-toolbar button:hover { border-color:var(--ink); background:var(--accent-soft); }
+.rich-toolbar button:disabled { opacity:.45; cursor:wait; }
+.rich-toolbar-divider { height:22px; width:1px; margin:0 3px; background:var(--line); }
+.rich-surface { min-height:300px; max-height:60dvh; overflow-y:auto; padding:18px; font-size:.94rem; line-height:1.8; white-space:pre-wrap; overflow-wrap:anywhere; outline:none; }
+.rich-surface:focus-visible { outline:3px solid var(--accent); outline-offset:-3px; }
+.rich-surface:empty::before { content:attr(data-placeholder); color:var(--muted); pointer-events:none; }
+.rich-surface[contenteditable="false"] { background:var(--paper); }
+.rich-source { display:block; width:100%; min-height:300px; max-height:60dvh; margin:0; padding:17px; resize:vertical; border:0; border-radius:0; outline:0; background:#f9f8f3; color:var(--ink); font:400 .85rem/1.65 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre; overflow:auto; }
+.rich-source:focus { outline:3px solid var(--accent); outline-offset:-3px; }
+.editor-help { margin:8px 0 0; color:var(--muted); font-size:.75rem; line-height:1.6; }
+.editor-insert-dialog { width:min(92vw,520px); }
+/* 在編輯器及閱讀畫面都用相同的文章排版規則。 */
+.post-content { white-space:normal; line-height:1.85; }
+.post-content :is(p,div,blockquote,ul,ol,pre,figure,table),
+.rich-surface :is(p,div,blockquote,ul,ol,pre,figure,table) { margin:0 0 1em; }
+.post-content :is(h2,h3,h4),.rich-surface :is(h2,h3,h4) { margin:1.2em 0 .5em; line-height:1.4; font-weight:700; }
+.post-content h2,.rich-surface h2 { font-size:1.48em; }
+.post-content h3,.rich-surface h3 { font-size:1.22em; }
+.post-content h4,.rich-surface h4 { font-size:1.08em; }
+.post-content :is(ul,ol),.rich-surface :is(ul,ol) { padding-left:1.5em; }
+.post-content blockquote,.rich-surface blockquote { padding:6px 0 6px 14px; border-left:3px solid var(--ink); color:var(--muted); }
+.post-content img,.rich-surface img { display:block; max-width:100%; height:auto; margin:16px 0; background:var(--paper); }
+.post-content a,.rich-surface a { text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; }
+.post-content pre,.rich-surface pre { padding:12px; overflow:auto; border:1px solid var(--line); background:var(--paper); white-space:pre-wrap; }
+.post-content :is(code,pre),.rich-surface :is(code,pre) { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+.post-content table,.rich-surface table { width:100%; border-collapse:collapse; }
+.post-content :is(td,th),.rich-surface :is(td,th) { padding:6px 9px; border:1px solid var(--line); text-align:left; }
+.post-content :is(p,div,blockquote,ul,ol,pre,figure,table):last-child,
+.rich-surface :is(p,div,blockquote,ul,ol,pre,figure,table):last-child { margin-bottom:0; }

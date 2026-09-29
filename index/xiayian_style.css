@@ -129,3 +129,15 @@
   .category-node-actions button { padding:3px 5px; }
   .category-form-actions { justify-content:space-between; }
 }
+
+/* 手機文章工具列：能折行、不溢出對話框。 */
+@media (max-width:640px) {
+  #editor-dialog { width:96vw; max-height:94dvh; }
+  #editor-dialog .dialog-card { padding:30px 15px 20px; }
+  .rich-mode button { padding:10px 6px; font-size:.77rem; }
+  .rich-toolbar { gap:2px; padding:6px; }
+  .rich-toolbar button { min-width:31px; min-height:36px; padding:4px 6px; }
+  .rich-toolbar-divider { margin:0 2px; }
+  .rich-surface,.rich-source { min-height:36dvh; max-height:52dvh; padding:13px; }
+  .editor-insert-dialog .dialog-card { padding:30px 20px 22px; }
+}

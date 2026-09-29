@@ -65,6 +65,313 @@
   });
   const siteToast = window.SlowlyToast.create("#site-toast", { duration:4500 });
 
+  // Rich articles are stored in the existing posts.content TEXT column.
+  // The backend payload, auth, and category APIs remain unchanged.
+  const ARTICLE_TAGS = [
+    "p","div","br","strong","b","em","i","u","s","del","h2","h3","h4",
+    "blockquote","ul","ol","li","a","img","figure","figcaption","hr",
+    "pre","code","span","sub","sup","mark","small","table","thead","tbody",
+    "tfoot","tr","th","td"
+  ];
+  const ARTICLE_ATTRIBUTES = ["href","target","rel","src","alt","title","width","height"];
+
+  function articleURL(value, kind) {
+    try {
+      const url = new URL(String(value || "").trim());
+      if (url.username || url.password) return null;
+      if (kind === "image") return url.protocol === "https:" ? url.href : null;
+      return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function sanitizeArticleHTML(value) {
+    if (!window.DOMPurify?.sanitize) {
+      throw new Error("文章安全元件尚未載入，請確認網路連線後重新整理。");
+    }
+    const clean = window.DOMPurify.sanitize(String(value || ""), {
+      ALLOWED_TAGS: ARTICLE_TAGS,
+      ALLOWED_ATTR: ARTICLE_ATTRIBUTES,
+      ALLOW_DATA_ATTR: false,
+      ALLOW_ARIA_ATTR: false,
+      FORBID_TAGS: ["script","style","iframe","object","embed","svg","math","form","input","button","video","audio","canvas","template"],
+      KEEP_CONTENT: true
+    });
+    const template = document.createElement("template");
+    template.innerHTML = clean;
+    template.content.querySelectorAll("img").forEach(function (img) {
+      const src = articleURL(img.getAttribute("src"), "image");
+      if (!src) { img.remove(); return; }
+      img.setAttribute("src", src);
+      img.setAttribute("loading", "lazy");
+      img.setAttribute("decoding", "async");
+      if (img.hasAttribute("alt")) img.setAttribute("alt", img.getAttribute("alt").slice(0, 300));
+      else img.setAttribute("alt", "文章圖片");
+      ["width","height"].forEach(function (attr) {
+        const raw = img.getAttribute(attr);
+        if (raw !== null && (!/^\d{1,4}$/.test(raw) || Number(raw) > 3000)) img.removeAttribute(attr);
+      });
+    });
+    template.content.querySelectorAll("a").forEach(function (anchor) {
+      const href = articleURL(anchor.getAttribute("href"), "link");
+      if (!href) { anchor.replaceWith(...Array.from(anchor.childNodes)); return; }
+      anchor.setAttribute("href", href);
+      anchor.setAttribute("target", "_blank");
+      anchor.setAttribute("rel", "noopener noreferrer");
+    });
+    return template.innerHTML;
+  }
+
+  function renderArticleContent(target, html) {
+    try { target.innerHTML = sanitizeArticleHTML(html); }
+    catch (error) {
+      // Never inject unfiltered HTML when the security dependency is unavailable.
+      target.textContent = String(html || "");
+      console.error("article sanitizer unavailable", error);
+    }
+  }
+
+  function createRichEditor() {
+    const visual = document.getElementById("post-visual");
+    const source = document.getElementById("post-html");
+    const hidden = elements["post-content"];
+    const toolbar = document.getElementById("editor-toolbar");
+    const visualTab = document.getElementById("editor-visual-tab");
+    const sourceTab = document.getElementById("editor-html-tab");
+    const imageDialog = document.getElementById("image-dialog");
+    const imageForm = document.getElementById("image-form");
+    const imageURL = document.getElementById("image-url");
+    const imageAlt = document.getElementById("image-alt");
+    const imageError = document.getElementById("image-error");
+    const linkDialog = document.getElementById("link-dialog");
+    const linkForm = document.getElementById("link-form");
+    const linkURL = document.getElementById("link-url");
+    const linkLabel = document.getElementById("link-label");
+    const linkError = document.getElementById("link-error");
+    const editorError = elements["editor-error"];
+    let mode = "visual";
+    let selectedRange = null;
+    let busy = false;
+
+    function rememberRange() {
+      if (mode !== "visual" || !visual.isConnected) return;
+      const selection = window.getSelection();
+      if (!selection?.rangeCount) return;
+      const range = selection.getRangeAt(0);
+      if (visual.contains(range.startContainer) && visual.contains(range.endContainer)) {
+        selectedRange = range.cloneRange();
+      }
+    }
+    document.addEventListener("selectionchange", rememberRange);
+    ["keyup","mouseup","touchend","input"].forEach(type => visual.addEventListener(type, rememberRange));
+
+    function restoreRange() {
+      visual.focus();
+      const selection = window.getSelection();
+      if (!selection) return;
+      if (selectedRange && visual.contains(selectedRange.startContainer) && visual.contains(selectedRange.endContainer)) {
+        selection.removeAllRanges();
+        selection.addRange(selectedRange);
+      } else {
+        const range = document.createRange();
+        range.selectNodeContents(visual);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+
+    function insertSafeNode(node) {
+      restoreRange();
+      const selection = window.getSelection();
+      if (!selection?.rangeCount) { visual.appendChild(node); return; }
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(node);
+      range.setStartAfter(node);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      rememberRange();
+    }
+
+    function updateMode(next) {
+      mode = next;
+      const isVisual = mode === "visual";
+      visual.hidden = !isVisual;
+      source.hidden = isVisual;
+      toolbar.hidden = !isVisual;
+      visualTab.setAttribute("aria-selected", String(isVisual));
+      sourceTab.setAttribute("aria-selected", String(!isVisual));
+      visualTab.tabIndex = isVisual ? 0 : -1;
+      sourceTab.tabIndex = isVisual ? -1 : 0;
+      visual.contentEditable = String(isVisual && !busy);
+      source.disabled = busy;
+    }
+
+    function switchMode(next) {
+      if (busy || next === mode) return;
+      try {
+        if (next === "html") {
+          const html = sanitizeArticleHTML(visual.innerHTML);
+          hidden.value = html;
+          source.value = html;
+          updateMode("html");
+          source.focus();
+        } else {
+          const html = sanitizeArticleHTML(source.value);
+          if (html.trim() !== source.value.trim()) {
+            siteToast.show("HTML 已經過安全整理，請確認排版與內容。");
+          }
+          hidden.value = html;
+          source.value = html;
+          visual.innerHTML = html;
+          selectedRange = null;
+          updateMode("visual");
+          visual.focus();
+        }
+        editorError.textContent = "";
+      } catch (error) { editorError.textContent = message(error); }
+    }
+
+    visualTab.addEventListener("click", () => switchMode("visual"));
+    sourceTab.addEventListener("click", () => switchMode("html"));
+    [visualTab,sourceTab].forEach(button => button.addEventListener("keydown", function (event) {
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      event.preventDefault();
+      switchMode(button === visualTab ? "html" : "visual");
+    }));
+
+    toolbar.addEventListener("mousedown", event => {
+      if (event.target.closest("button")) event.preventDefault();
+    });
+    toolbar.addEventListener("click", function (event) {
+      const button = event.target.closest("[data-editor-command]");
+      if (!button || busy || mode !== "visual") return;
+      restoreRange();
+      const command = button.dataset.editorCommand;
+      const argument = button.dataset.editorValue || null;
+      if (!document.execCommand(command, false, argument)) {
+        siteToast.show("這個排版指令在目前的瀏覽器中不可用。");
+      }
+      rememberRange();
+    });
+
+    function pasteText(text) {
+      restoreRange();
+      if (!document.execCommand("insertText", false, text)) {
+        insertSafeNode(document.createTextNode(text));
+      }
+    }
+    visual.addEventListener("paste", function (event) {
+      const clipboard = event.clipboardData;
+      if (!clipboard) return;
+      event.preventDefault();
+      if (clipboard.files?.length) {
+        siteToast.show("不提供圖片上傳；請先放到圖床，再用圖片網址插入。");
+        return;
+      }
+      const pastedHTML = clipboard.getData("text/html");
+      if (pastedHTML) {
+        try {
+          const cleaned = sanitizeArticleHTML(pastedHTML);
+          restoreRange();
+          if (!document.execCommand("insertHTML", false, cleaned)) pasteText(clipboard.getData("text/plain"));
+        } catch (error) { editorError.textContent = message(error); }
+      } else {
+        pasteText(clipboard.getData("text/plain"));
+      }
+      rememberRange();
+    });
+    visual.addEventListener("drop", function (event) {
+      event.preventDefault();
+      siteToast.show("請透過工具列貼上圖床網址；不接受拖放上傳。");
+    });
+
+    document.getElementById("insert-image-button").addEventListener("click", function () {
+      if (busy || mode !== "visual") return;
+      rememberRange();
+      imageForm.reset(); imageError.textContent = "";
+      imageDialog.showModal(); imageURL.focus();
+    });
+    imageForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      const src = articleURL(imageURL.value, "image");
+      if (!src) { imageError.textContent = "請貼上 HTTPS 圖片直連，不支援上傳或 Base64。"; return; }
+      const img = document.createElement("img");
+      img.src = src; img.alt = imageAlt.value.trim().slice(0,300) || "文章圖片";
+      img.loading = "lazy"; img.decoding = "async";
+      imageDialog.close(); insertSafeNode(img);
+      editorError.textContent = "";
+    });
+
+    document.getElementById("insert-link-button").addEventListener("click", function () {
+      if (busy || mode !== "visual") return;
+      rememberRange();
+      linkForm.reset(); linkError.textContent = "";
+      const selectedText = selectedRange?.toString().trim() || "";
+      linkLabel.disabled = Boolean(selectedText);
+      linkLabel.placeholder = selectedText || "未選取文字時，可輸入連結名稱";
+      linkDialog.showModal(); linkURL.focus();
+    });
+    linkForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      const href = articleURL(linkURL.value, "link");
+      if (!href) { linkError.textContent = "請輸入有效的 HTTP 或 HTTPS 網址。"; return; }
+      linkDialog.close();
+      restoreRange();
+      if (selectedRange && !selectedRange.collapsed) {
+        if (!document.execCommand("createLink", false, href)) {
+          linkError.textContent = "連結插入失敗，請重新選取文字。";
+          siteToast.show(linkError.textContent);
+          return;
+        }
+        visual.querySelectorAll("a[href]").forEach(a => {
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+        });
+        rememberRange();
+      } else {
+        const a = document.createElement("a");
+        a.href = href; a.textContent = linkLabel.value.trim() || href;
+        a.target = "_blank"; a.rel = "noopener noreferrer";
+        insertSafeNode(a);
+      }
+      editorError.textContent = "";
+    });
+
+    return {
+      load(value) {
+        const html = sanitizeArticleHTML(value);
+        hidden.value = html;
+        source.value = html;
+        visual.innerHTML = html;
+        selectedRange = null;
+        busy = false;
+        updateMode("visual");
+      },
+      getHTML() {
+        const raw = mode === "visual" ? visual.innerHTML : source.value;
+        const clean = sanitizeArticleHTML(raw);
+        if (mode === "html" && clean.trim() !== raw.trim()) {
+          source.value = clean;
+          hidden.value = clean;
+          editorError.textContent = "HTML 已過濾不安全或不支援的內容，請確認後再儲存。";
+          return null;
+        }
+        hidden.value = clean;
+        return clean;
+      },
+      setBusy(value) {
+        busy = Boolean(value);
+        updateMode(mode);
+      }
+    };
+  }
+  const richEditor = createRichEditor();
+
+
   function isAdmin() { return Boolean(session?.user?.id && ADMIN_UIDS.has(session.user.id)); }
   function formatDate(value) { return new Intl.DateTimeFormat("zh-TW", { year:"numeric", month:"long", day:"numeric" }).format(new Date(value)); }
   function setBusy(form, busy) { form.querySelectorAll("button,input,textarea,select").forEach(function (node) { node.disabled = busy; }); }
@@ -272,7 +579,7 @@
       const title = document.createElement("h3"); title.textContent = post.title;
       const toggle = document.createElement("button"); toggle.className = "post-toggle"; toggle.type = "button"; toggle.textContent = "›"; toggle.setAttribute("aria-label", `展開「${post.title}」內文`); toggle.setAttribute("aria-expanded", "false");
       const details = document.createElement("div"); details.className = "post-details";
-      const content = document.createElement("div"); content.className = "post-content"; content.textContent = post.content;
+      const content = document.createElement("div"); content.className = "post-content"; renderArticleContent(content, post.content);
       heading.append(title, toggle); details.append(meta, content); article.append(heading, details);
       toggle.addEventListener("click", function () {
         const open = article.classList.toggle("is-open");
@@ -374,7 +681,8 @@
     elements["editor-form"].reset(); elements["editor-error"].textContent = "";
     elements["post-id"].value = post?.id || "";
     elements["post-title"].value = post?.title || "";
-    elements["post-content"].value = post?.content || "";
+    try { richEditor.load(post?.content || ""); }
+    catch (error) { siteToast.show(message(error)); return; }
     elements["post-published"].checked = post ? post.published : true;
     const selectedTreeCategory = selectedCategoryKey();
     const initialCategory = post
@@ -483,7 +791,12 @@
     event.preventDefault();
     const title = elements["post-title"].value.trim();
     if (!title) { elements["editor-error"].textContent = "請輸入文章標題。"; return; }
-    setBusy(elements["editor-form"], true); elements["editor-error"].textContent = "";
+    elements["editor-error"].textContent = "";
+    let articleHTML;
+    try { articleHTML = richEditor.getHTML(); }
+    catch (error) { elements["editor-error"].textContent = message(error); return; }
+    if (articleHTML === null) return;
+    setBusy(elements["editor-form"], true); richEditor.setBusy(true);
     const values = { title, content:elements["post-content"].value, published:elements["post-published"].checked };
     const id = elements["post-id"].value;
     const targetCategory = taxonomyReady ? (elements["post-category"].value || null) : null;
@@ -507,7 +820,7 @@
       }
       elements["editor-dialog"].close(); await loadPosts();
     } catch (error) { elements["editor-error"].textContent = `儲存失敗：${message(error)}`; }
-    finally { setBusy(elements["editor-form"], false); postCategorySelect?.sync(); }
+    finally { setBusy(elements["editor-form"], false); richEditor.setBusy(false); postCategorySelect?.sync(); }
   });
 
   adminAuth.auth.onAuthStateChange(function (_event, currentSession) {
