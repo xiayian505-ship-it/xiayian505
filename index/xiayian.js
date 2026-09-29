@@ -20,15 +20,57 @@
   const adminAuth = window.supabase.createClient(ADMIN_AUTH_URL, ADMIN_AUTH_KEY, {
     auth: { storageKey:"happy-family-shared-admin-auth" }
   });
-  const elements = Object.fromEntries(["posts","status","post-count","auth-button","new-post-button","admin-badge","login-dialog","login-form","login-email","login-password","login-error","editor-dialog","editor-form","editor-title","editor-error","post-id","post-title","post-content","post-published"].map(function (id) { return [id, document.getElementById(id)]; }));
+  const TAXONOMY_API_URL = `${BLOG_SUPABASE_URL}/functions/v1/blog-taxonomy`;
+  const elements = Object.fromEntries([
+    "posts","status","post-count","auth-button","new-post-button","admin-badge",
+    "login-dialog","login-form","login-email","login-password","login-error",
+    "editor-dialog","editor-form","editor-title","editor-error","post-id","post-title",
+    "post-content","post-published","post-category","post-pages","post-prev","post-next","post-page-label",
+    "category-section","category-tree","category-status","new-category-button",
+    "category-dialog","category-form","category-dialog-title","category-id","category-name",
+    "category-parent","category-error","category-delete","category-save"
+  ].map(function (id) { return [id, document.getElementById(id)]; }));
+
   let session = null;
   let posts = [];
+  let categories = [];
+  let assignmentMap = new Map();
+  let taxonomyReady = false;
+  let currentPage = 1;
+  let lastAdminMode = null;
+  let loadVersion = 0;
+
+  // 軍火庫管理選取／展開狀態。父子關係、顯示與儲存屬於個人頁。
+  const tree = window.TreeSelection.create({ expansion:"multiple", selected:["all"] });
+  const postCategorySelect = window.SlowlySelect.create("#post-category");
+  const categoryParentSelect = window.SlowlySelect.create("#category-parent");
+
+  // 軍火庫 AuthPermissionUI 僅負責顯示；原有 Supabase Auth 與管理員檢查不變。
+  const authUI = window.AuthPermissionUI.create({
+    root: document.body,
+    async onLogin({ account, password }) {
+      const { data, error } = await adminAuth.auth.signInWithPassword({ email:account.trim(), password });
+      if (error) throw new Error("登入失敗，請確認帳號與密碼。");
+      if (!data.user?.id || !ADMIN_UIDS.has(data.user.id)) {
+        await adminAuth.auth.signOut();
+        throw new Error("此帳號沒有最高管理權限。");
+      }
+      elements["login-dialog"].close();
+    },
+    loginErrorText(error) {
+      const msg = error?.message;
+      return msg === "登入失敗，請確認帳號與密碼。" || msg === "此帳號沒有最高管理權限。"
+        ? msg : "登入失敗，請稍後再試。";
+    }
+  });
+  const siteToast = window.SlowlyToast.create("#site-toast", { duration:4500 });
 
   function isAdmin() { return Boolean(session?.user?.id && ADMIN_UIDS.has(session.user.id)); }
   function formatDate(value) { return new Intl.DateTimeFormat("zh-TW", { year:"numeric", month:"long", day:"numeric" }).format(new Date(value)); }
-  function setBusy(form, busy) { form.querySelectorAll("button,input,textarea").forEach(function (node) { node.disabled = busy; }); }
+  function setBusy(form, busy) { form.querySelectorAll("button,input,textarea,select").forEach(function (node) { node.disabled = busy; }); }
   function message(error) { return error?.message || "發生未預期的錯誤，請稍後再試。"; }
 
+  // 這個 adminRequest 函式使用原檔原本的 blog-admin；請勿改成直接寫 posts。
   async function adminRequest(path, options) {
     if (!isAdmin() || !session?.access_token) throw new Error("管理員工作階段已失效，請重新登入。");
     const response = await fetch(`${ADMIN_API_URL}${path}`, {
@@ -41,16 +83,191 @@
     return payload;
   }
 
+
+  async function taxonomyRequest(path, options) {
+    if (!isAdmin() || !session?.access_token) throw new Error("管理員工作階段已失效，請重新登入。");
+    const response = await fetch(`${TAXONOMY_API_URL}${path}`, {
+      method:options?.method || "GET",
+      headers:{ "Authorization":`Bearer ${session.access_token}`, "Content-Type":"application/json" },
+      body:options?.body === undefined ? undefined : JSON.stringify(options.body)
+    });
+    const payload = await response.json().catch(function () { return {}; });
+    if (!response.ok) throw new Error(payload.error || "分類操作失敗，請稍後再試。");
+    return payload;
+  }
+
+  function categoryId(value) { return value === null || value === undefined ? null : String(value); }
+  function categoryById(id) { return categories.find(category => String(category.id) === String(id)) || null; }
+  function childrenOf(parentId) {
+    return categories.filter(category => categoryId(category.parent_id) === categoryId(parentId))
+      .sort((a,b) => a.name.localeCompare(b.name,"zh-Hant") || Number(a.id) - Number(b.id));
+  }
+  function walkCategories(visit, parentId = null, depth = 0, seen = new Set()) {
+    for (const category of childrenOf(parentId)) {
+      const id = String(category.id);
+      if (seen.has(id)) continue;
+      const next = new Set(seen); next.add(id);
+      visit(category,depth,next);
+      walkCategories(visit,id,depth + 1,next);
+    }
+  }
+  function descendantIds(id) {
+    const result = new Set([String(id)]);
+    const walk = key => {
+      for (const child of childrenOf(key)) {
+        const childId = String(child.id);
+        if (result.has(childId)) continue;
+        result.add(childId);
+        walk(childId);
+      }
+    };
+    walk(id);
+    return result;
+  }
+  function selectedCategoryKey() { return tree.getSelected()[0] || "all"; }
+  function visiblePosts() {
+    const selected = selectedCategoryKey();
+    if (!taxonomyReady || selected === "all") return posts;
+    if (selected === "uncategorized") return posts.filter(post => !assignmentMap.has(String(post.id)));
+    if (!selected.startsWith("cat:")) return posts;
+    const id = selected.slice(4);
+    if (!categoryById(id)) return posts;
+    const allowed = descendantIds(id);
+    return posts.filter(post => allowed.has(String(assignmentMap.get(String(post.id)))));
+  }
+  function selectCategory(key) {
+    tree.replaceSelected([key]);
+    if (key.startsWith("cat:")) tree.expand(key);
+    currentPage = 1;
+    render();
+  }
+  function createEl(tag,className,text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = String(text);
+    return node;
+  }
+  function treeFilterButton(key,label,count) {
+    const row = createEl("div","category-row");
+    const spacer = createEl("span","category-expander"); spacer.setAttribute("aria-hidden","true");
+    const button = createEl("button","category-link",label);
+    button.type = "button";
+    button.setAttribute("aria-current",String(tree.has(key)));
+    button.addEventListener("click",() => selectCategory(key));
+    row.append(spacer,button,createEl("span","category-count",count));
+    return row;
+  }
+  function renderCategoryTree() {
+    const target = elements["category-tree"];
+    target.replaceChildren();
+    target.appendChild(treeFilterButton("all","全部文章",posts.length));
+    elements["new-category-button"].disabled = !taxonomyReady;
+    if (!taxonomyReady) return;
+
+    const unclassified = posts.filter(post => !assignmentMap.has(String(post.id))).length;
+    if (unclassified || isAdmin()) target.appendChild(treeFilterButton("uncategorized","未分類",unclassified));
+    if (!categories.length) {
+      target.appendChild(createEl("p","category-empty","目前尚無分類。"));
+      return;
+    }
+
+    const list = createEl("ul","category-list");
+    const build = (parentId, seen = new Set()) => {
+      const group = createEl("ul","category-list");
+      for (const category of childrenOf(parentId)) {
+        const id = String(category.id);
+        if (seen.has(id)) continue;
+        const next = new Set(seen); next.add(id);
+        const children = childrenOf(id);
+        const key = `cat:${id}`;
+        const li = createEl("li","category-node");
+        const row = createEl("div","category-row");
+        const expander = createEl("button","category-expander",children.length ? (tree.isExpanded(key) ? "▾" : "▸") : "·");
+        expander.type="button"; expander.disabled = children.length === 0;
+        expander.setAttribute("aria-label",`${tree.isExpanded(key) ? "收合" : "展開"}「${category.name}」`);
+        expander.setAttribute("aria-expanded",String(tree.isExpanded(key)));
+        expander.addEventListener("click",() => { tree.toggleExpanded(key); renderCategoryTree(); });
+        const label = createEl("button","category-link",category.name);
+        label.type="button"; label.setAttribute("aria-current",String(tree.has(key)));
+        label.addEventListener("click",() => selectCategory(key));
+        const descendants = descendantIds(id);
+        const count = posts.filter(post => descendants.has(String(assignmentMap.get(String(post.id))))).length;
+        row.append(expander,label,createEl("span","category-count",count));
+        if (isAdmin()) {
+          const actions = createEl("span","category-node-actions");
+          const add = createEl("button", "", "＋");
+          add.type="button"; add.title=`在「${category.name}」下新增分類`;
+          add.setAttribute("aria-label",add.title);
+          add.addEventListener("click",() => openCategoryEditor(null,id));
+          const edit = createEl("button", "", "編輯");
+          edit.type="button"; edit.setAttribute("aria-label",`管理「${category.name}」`);
+          edit.addEventListener("click",() => openCategoryEditor(category));
+          actions.append(add,edit); row.append(actions);
+        }
+        li.appendChild(row);
+        if (children.length) {
+          const nested = build(id,next);
+          nested.hidden = !tree.isExpanded(key);
+          li.appendChild(nested);
+        }
+        group.appendChild(li);
+      }
+      return group;
+    };
+    const built = build(null);
+    while (built.firstChild) list.appendChild(built.firstChild);
+    target.appendChild(list);
+  }
+
+  function populateCategorySelect(select, { mode, currentId = null, selected = "" } = {}) {
+    select.replaceChildren();
+    const first = document.createElement("option");
+    first.value = "";
+    first.textContent = mode === "parent" ? "最上層" : "未分類";
+    select.appendChild(first);
+    const excluded = currentId === null ? new Set() : descendantIds(currentId);
+    walkCategories((category,depth) => {
+      const id = String(category.id);
+      if (excluded.has(id)) return;
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = `${"　".repeat(Math.min(depth,12))}${category.name}`;
+      select.appendChild(option);
+    });
+    select.value = selected === null ? "" : String(selected);
+    if (select.selectedIndex < 0) select.value = "";
+    select.disabled = !taxonomyReady;
+    if (select === elements["post-category"]) postCategorySelect?.sync();
+    if (select === elements["category-parent"]) categoryParentSelect?.sync();
+  }
+
   function render() {
+    renderCategoryTree();
     elements.posts.replaceChildren();
-    elements.status.hidden = posts.length > 0;
-    if (!posts.length) { elements.status.textContent = "目前還沒有文章。"; elements.status.classList.remove("error"); }
-    elements["post-count"].textContent = posts.length ? `1 / ${Math.max(1, Math.ceil(posts.length / 5))}` : "";
-    posts.forEach(function (post) {
+    const filtered = visiblePosts();
+    elements.status.hidden = filtered.length > 0;
+    if (!filtered.length) {
+      elements.status.textContent = posts.length ? "這個分類目前還沒有文章。" : "目前還沒有文章。";
+      elements.status.classList.remove("error");
+    }
+    const page = window.FictionPaginate?.paginate
+      ? window.FictionPaginate.paginate(filtered, { page:currentPage, pageSize:5 })
+      : { data:filtered, page:1, totalPages:1, hasPrevious:false, hasNext:false };
+    currentPage = page.page;
+    elements["post-count"].textContent = filtered.length ? `${page.page} / ${page.totalPages}` : "";
+    elements["post-pages"].hidden = page.totalPages <= 1;
+    elements["post-page-label"].textContent = `${page.page} / ${page.totalPages}`;
+    elements["post-prev"].disabled = !page.hasPrevious;
+    elements["post-next"].disabled = !page.hasNext;
+    page.data.forEach(function (post) {
       const article = document.createElement("article"); article.className = "post-card";
       const meta = document.createElement("div"); meta.className = "post-meta";
       const time = document.createElement("time"); time.dateTime = post.created_at; time.textContent = formatDate(post.created_at); meta.append(time);
       if (!post.published) { const badge = document.createElement("span"); badge.className = "draft"; badge.textContent = "草稿"; meta.append(badge); }
+      if (taxonomyReady) {
+        const assigned = categoryById(assignmentMap.get(String(post.id)));
+        if (assigned) meta.append(createEl("span","post-category-label",assigned.name));
+      }
       const heading = document.createElement("div"); heading.className = "post-heading";
       const title = document.createElement("h3"); title.textContent = post.title;
       const toggle = document.createElement("button"); toggle.className = "post-toggle"; toggle.type = "button"; toggle.textContent = "›"; toggle.setAttribute("aria-label", `展開「${post.title}」內文`); toggle.setAttribute("aria-expanded", "false");
@@ -73,68 +290,224 @@
   }
 
   async function loadPosts() {
-    elements.status.hidden = false; elements.status.textContent = "正在讀取文章…"; elements.status.classList.remove("error");
+    const version = ++loadVersion;
+    const admin = isAdmin();
+    elements.status.hidden = false;
+    elements.status.textContent = "正在讀取文章…";
+    elements.status.classList.remove("error");
+    elements["category-status"].textContent = "正在讀取分類…";
+    let nextPosts;
     try {
-      if (isAdmin()) {
+      if (admin) {
         const payload = await adminRequest("/posts");
-        posts = payload.posts || [];
+        nextPosts = payload.posts || [];
       } else {
-        const { data, error } = await db.from("posts").select("id,title,content,published,created_at,updated_at").eq("published", true).order("created_at", { ascending:false });
+        const { data, error } = await db.from("posts").select("id,title,content,published,created_at,updated_at").eq("published",true).order("created_at",{ ascending:false });
         if (error) throw error;
-        posts = data || [];
+        nextPosts = data || [];
       }
-      render();
     } catch (error) {
-      console.error("load posts failed", error);
-      elements.status.textContent = "暫時無法讀取文章，請稍後重新整理。"; elements.status.classList.add("error");
+      if (version !== loadVersion || admin !== isAdmin()) return;
+      console.error("load posts failed",error);
+      elements.status.hidden = false;
+      elements.status.textContent = "暫時無法讀取文章，請稍後重新整理。";
+      elements.status.classList.add("error");
+      elements["category-status"].textContent = "";
+      return;
     }
+    if (version !== loadVersion || admin !== isAdmin()) return;
+    posts = nextPosts;
+    try {
+      const { data:loadedCategories, error:categoryError } = await db.from("blog_categories")
+        .select("id,parent_id,name,created_at,updated_at").order("id",{ ascending:true });
+      if (categoryError) throw categoryError;
+      let mappings;
+      if (admin) {
+        const payload = await taxonomyRequest("/assignments");
+        mappings = payload.assignments || [];
+      } else {
+        const { data, error } = await db.from("blog_post_categories").select("post_id,category_id");
+        if (error) throw error;
+        mappings = data || [];
+      }
+      if (version !== loadVersion || admin !== isAdmin()) return;
+      categories = loadedCategories || [];
+      assignmentMap = new Map(mappings.map(item => [String(item.post_id),String(item.category_id)]));
+      taxonomyReady = true;
+      elements["category-status"].textContent = "";
+      const selected = selectedCategoryKey();
+      if (selected.startsWith("cat:") && !categoryById(selected.slice(4))) {
+        tree.replaceSelected(["all"]);
+        currentPage = 1;
+      }
+    } catch (error) {
+      if (version !== loadVersion || admin !== isAdmin()) return;
+      console.error("load taxonomy failed",error);
+      categories = [];
+      assignmentMap = new Map();
+      taxonomyReady = false;
+      tree.replaceSelected(["all"]);
+      currentPage = 1;
+      elements["category-status"].textContent = "分類暫時無法讀取，文章仍可正常閱讀。";
+    }
+    render();
   }
 
   function updateAuthUI() {
     const admin = isAdmin();
-    elements["new-post-button"].hidden = !admin; elements["admin-badge"].hidden = !admin;
+    if (lastAdminMode !== admin) {
+      ++loadVersion; // Invalidates in-flight admin loads when switching to visitor mode.
+      posts = []; categories = []; assignmentMap = new Map(); taxonomyReady = false;
+      tree.replaceSelected(["all"]); tree.collapseAll();
+      currentPage = 1;
+      lastAdminMode = admin;
+      elements.status.hidden = false;
+      elements.status.textContent = "正在讀取文章…";
+    }
+    authUI.setState({ role:admin ? "admin" : "guest", permissions:admin ? ["write"] : [] });
     elements["auth-button"].textContent = admin ? "再會" : "歡迎";
-    render();
+    elements["new-category-button"].disabled = !taxonomyReady;
+    renderCategoryTree();
   }
 
   function openEditor(post) {
     elements["editor-form"].reset(); elements["editor-error"].textContent = "";
-    elements["post-id"].value = post?.id || ""; elements["post-title"].value = post?.title || ""; elements["post-content"].value = post?.content || ""; elements["post-published"].checked = post ? post.published : true;
-    elements["editor-title"].textContent = post ? "編輯文章" : "新增文章"; elements["editor-dialog"].showModal(); elements["post-title"].focus();
+    elements["post-id"].value = post?.id || "";
+    elements["post-title"].value = post?.title || "";
+    elements["post-content"].value = post?.content || "";
+    elements["post-published"].checked = post ? post.published : true;
+    const selectedTreeCategory = selectedCategoryKey();
+    const initialCategory = post
+      ? (assignmentMap.get(String(post.id)) || "")
+      : (selectedTreeCategory.startsWith("cat:") ? selectedTreeCategory.slice(4) : "");
+    populateCategorySelect(elements["post-category"], { mode:"post", selected:initialCategory });
+    elements["editor-title"].textContent = post ? "編輯文章" : "新增文章";
+    elements["editor-dialog"].showModal(); elements["post-title"].focus();
+  }
+
+  function openCategoryEditor(category = null, initialParentId = null) {
+    if (!isAdmin() || !taxonomyReady) return;
+    elements["category-form"].reset();
+    elements["category-error"].textContent = "";
+    elements["category-id"].value = category ? String(category.id) : "";
+    elements["category-name"].value = category?.name || "";
+    const parent = category ? categoryId(category.parent_id) : categoryId(initialParentId);
+    populateCategorySelect(elements["category-parent"], {
+      mode:"parent", currentId:category ? String(category.id) : null, selected:parent
+    });
+    elements["category-delete"].hidden = !category;
+    elements["category-dialog-title"].textContent = category ? "管理分類" : "新增分類";
+    elements["category-dialog"].showModal();
+    elements["category-name"].focus();
+  }
+
+  async function deleteCategory() {
+    if (!isAdmin() || !taxonomyReady) return;
+    const id = elements["category-id"].value;
+    const category = categoryById(id);
+    if (!category) return;
+    // Native dialog is in the top layer; close it before showing library Confirm.
+    elements["category-dialog"].close();
+    const confirmed = await window.SlowlyConfirm.show({
+      title:"刪除分類", message:`確定刪除「${category.name}」？有文章或子分類時不會刪除。`,
+      confirmText:"刪除",cancelText:"取消",className:"xiayian-confirm"
+    });
+    if (!confirmed) { elements["category-dialog"].showModal(); return; }
+    try {
+      await taxonomyRequest(`/categories/${encodeURIComponent(id)}`, { method:"DELETE" });
+      await loadPosts();
+      siteToast.show("分類已刪除。");
+    } catch (error) {
+      elements["category-dialog"].showModal();
+      elements["category-error"].textContent = message(error);
+    }
   }
 
   async function deletePost(post) {
-    if (!confirm(`確定要刪除「${post.title}」嗎？此操作無法復原。`)) return;
+    if (!window.SlowlyConfirm?.show) {
+      siteToast.show("確認視窗尚未載入，未執行刪除。");
+      return;
+    }
+    const confirmed = await window.SlowlyConfirm.show({
+      title:"刪除文章", message:`確定要刪除「${post.title}」嗎？此操作無法復原。`,
+      confirmText:"刪除",cancelText:"取消",className:"xiayian-confirm"
+    });
+    if (!confirmed) return;
     try { await adminRequest(`/posts/${encodeURIComponent(post.id)}`, { method:"DELETE" }); await loadPosts(); }
-    catch (error) { alert(`刪除失敗：${message(error)}`); }
+    catch (error) { siteToast.show(`刪除失敗：${message(error)}`); }
   }
 
   elements["auth-button"].addEventListener("click", async function () {
     if (isAdmin()) { await adminAuth.auth.signOut(); return; }
-    elements["login-form"].reset(); elements["login-error"].textContent = ""; elements["login-dialog"].showModal(); elements["login-email"].focus();
+    elements["login-form"].reset(); authUI.setMessage(""); elements["login-dialog"].showModal(); elements["login-email"].focus();
   });
   elements["new-post-button"].addEventListener("click", function () { openEditor(null); });
+  elements["new-category-button"].addEventListener("click", function () { openCategoryEditor(); });
+  elements["category-delete"].addEventListener("click",deleteCategory);
 
-  elements["login-form"].addEventListener("submit", async function (event) {
-    event.preventDefault(); setBusy(elements["login-form"], true); elements["login-error"].textContent = "";
-    const { data, error } = await adminAuth.auth.signInWithPassword({ email:elements["login-email"].value.trim(), password:elements["login-password"].value });
-    setBusy(elements["login-form"], false);
-    if (error) { elements["login-error"].textContent = "登入失敗，請確認帳號與密碼。"; return; }
-    if (!data.user?.id || !ADMIN_UIDS.has(data.user.id)) { await adminAuth.auth.signOut(); elements["login-error"].textContent = "此帳號沒有最高管理權限。"; return; }
-    elements["login-dialog"].close();
+  elements["category-form"].addEventListener("submit",async function(event) {
+    event.preventDefault();
+    if (!isAdmin() || !taxonomyReady) return;
+    const name = elements["category-name"].value.trim();
+    if (!name) { elements["category-error"].textContent = "請輸入分類名稱。"; return; }
+    const id = elements["category-id"].value;
+    const parent = elements["category-parent"].value || null;
+    elements["category-error"].textContent = "";
+    setBusy(elements["category-form"],true);
+    try {
+      const result = await taxonomyRequest(id ? `/categories/${encodeURIComponent(id)}` : "/categories", {
+        method:id ? "PATCH" : "POST", body:{ name, parent_id:parent }
+      });
+      elements["category-dialog"].close();
+      await loadPosts();
+      if (parent) tree.expand(`cat:${parent}`);
+      if (!id && result.category?.id) tree.replaceSelected([`cat:${result.category.id}`]);
+      currentPage = 1;
+      render();
+      siteToast.show(id ? "分類已更新。" : "分類已新增。");
+    } catch (error) { elements["category-error"].textContent = message(error); }
+    finally { setBusy(elements["category-form"],false); categoryParentSelect?.sync(); }
+  });
+
+  elements["post-prev"].addEventListener("click", function () {
+    if (currentPage <= 1) return;
+    currentPage -= 1; render();
+    elements.posts.scrollIntoView({ behavior:"smooth", block:"start" });
+  });
+  elements["post-next"].addEventListener("click", function () {
+    currentPage += 1; render();
+    elements.posts.scrollIntoView({ behavior:"smooth", block:"start" });
   });
 
   elements["editor-form"].addEventListener("submit", async function (event) {
-    event.preventDefault(); const title = elements["post-title"].value.trim();
+    event.preventDefault();
+    const title = elements["post-title"].value.trim();
     if (!title) { elements["editor-error"].textContent = "請輸入文章標題。"; return; }
     setBusy(elements["editor-form"], true); elements["editor-error"].textContent = "";
     const values = { title, content:elements["post-content"].value, published:elements["post-published"].checked };
     const id = elements["post-id"].value;
+    const targetCategory = taxonomyReady ? (elements["post-category"].value || null) : null;
+    const initialCategory = id ? (assignmentMap.get(String(id)) || null) : null;
     try {
-      await adminRequest(id ? `/posts/${encodeURIComponent(id)}` : "/posts", { method:id ? "PATCH" : "POST", body:values });
+      // Original article API and payload unchanged. Category is saved separately.
+      const saved = await adminRequest(id ? `/posts/${encodeURIComponent(id)}` : "/posts", {
+        method:id ? "PATCH" : "POST", body:values
+      });
+      const savedId = saved.post?.id || id;
+      if (savedId) elements["post-id"].value = String(savedId);
+      if (taxonomyReady && savedId && targetCategory !== initialCategory) {
+        try {
+          await taxonomyRequest(`/assignments/${encodeURIComponent(savedId)}`, {
+            method:"PUT", body:{ category_id:targetCategory }
+          });
+        } catch (error) {
+          elements["editor-title"].textContent = "編輯文章";
+          throw new Error(`文章已儲存，但分類尚未更新：${message(error)}。請重試。`);
+        }
+      }
       elements["editor-dialog"].close(); await loadPosts();
     } catch (error) { elements["editor-error"].textContent = `儲存失敗：${message(error)}`; }
-    finally { setBusy(elements["editor-form"], false); }
+    finally { setBusy(elements["editor-form"], false); postCategorySelect?.sync(); }
   });
 
   adminAuth.auth.onAuthStateChange(function (_event, currentSession) {

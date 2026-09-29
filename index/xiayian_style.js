@@ -1,13 +1,21 @@
 (function () {
   "use strict";
-  const now = new Date();
-  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-  const month = document.getElementById("today-month");
-  const year = document.getElementById("today-year");
-  const date = document.getElementById("today-date");
-  if (month) month.textContent = months[now.getMonth()];
-  if (year) year.textContent = String(now.getFullYear());
-  if (date) date.textContent = String(now.getDate());
+  const calendarTarget = document.getElementById("home-calendar");
+  if (calendarTarget) {
+    try {
+      if (!window.SlowlyCalendar?.mount) throw new Error("軍火庫日曆尚未載入。");
+      window.SlowlyCalendar.mount(calendarTarget, {
+        view:"month",
+        gridLines:false,
+        showLunar:true,
+        showFestivals:true,
+        showSolarTerms:true
+      });
+    } catch (error) {
+      console.error("calendar mount failed", error);
+      calendarTarget.textContent = "日曆暫時無法顯示。";
+    }
+  }
 
   document.addEventListener("click", function (event) {
     const closeButton = event.target.closest("[data-close]");

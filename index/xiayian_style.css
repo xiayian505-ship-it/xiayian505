@@ -69,54 +69,63 @@
 }
 
 
-/* UI v4 — today marker; structure borrowed, clothing stays xiayian */
-.today-mark {
-  min-height: 145px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  padding: 30px 0 28px;
-  color: var(--ink);
+/* UI v5 — 萬年曆引用軍火庫元件；本站只決定視覺與排版。 */
+.calendar-section { padding:26px 0 34px; }
+#home-calendar .slowly-calendar {
+  --sc-bg:var(--paper);
+  --sc-text:var(--ink);
+  --sc-muted:var(--muted);
+  --sc-soft:#eeece5;
+  --sc-weekend:var(--danger);
+  --sc-lunar:var(--muted);
+  --sc-festival:var(--danger);
+  --sc-solar-term:var(--ink);
+  --sc-grid-line:var(--line);
+  --sc-selected-bg:var(--accent-soft);
+  --sc-selected-text:var(--ink);
+  --sc-selected-border:var(--ink);
+  --sc-today-ring:var(--ink);
+  font-family:inherit;
+  background:transparent;
+}
+#home-calendar .sc-toolbar { margin-bottom:24px; }
+#home-calendar .sc-nav,
+#home-calendar .sc-today,
+#home-calendar .sc-title,
+#home-calendar .sc-picker-go,
+#home-calendar .sc-picker input,
+#home-calendar .sc-picker select,
+#home-calendar .sc-weekday,
+#home-calendar .sc-day { border-radius:0; }
+#home-calendar .sc-hero { padding-bottom:20px; border-bottom:1px solid var(--line); }
+#home-calendar .sc-hero-year { font-weight:500; }
+#home-calendar .sc-hero-day { font-weight:600; }
+#home-calendar .sc-weekday { background:transparent; border-bottom:1px solid var(--line); }
+#home-calendar .sc-day.is-today { box-shadow:inset 0 0 0 2px var(--sc-today-ring); }
+#home-calendar .sc-day:focus-visible { outline:3px solid var(--accent); outline-offset:1px; }
+#home-calendar .sc-nav:focus-visible,
+#home-calendar .sc-title:focus-visible,
+#home-calendar .sc-today:focus-visible { outline:3px solid var(--accent); outline-offset:1px; }
+
+@media (max-width:640px) {
+  .calendar-section { padding:18px 0 28px; }
+  #home-calendar .sc-toolbar { margin-bottom:18px; }
+  .post-pages { justify-content:space-between; gap:8px; }
+  .site-toast { left:18px; right:18px; bottom:18px; max-width:none; }
 }
 
-.today-mark-left {
-  display: flex;
-  flex-direction: column;
-  line-height: 1;
-}
 
-.today-month {
-  margin-bottom: 8px;
-  font-size: .68rem;
-  letter-spacing: .2em;
-  color: var(--muted);
-}
-
-.today-year {
-  font-size: 1.55rem;
-  font-weight: 500;
-  letter-spacing: -.03em;
-}
-
-.today-date {
-  font-size: clamp(3.4rem, 8vw, 5rem);
-  font-weight: 600;
-  line-height: .82;
-  letter-spacing: -.055em;
-  color: var(--ink);
-}
-
-@media (max-width: 640px) {
-  .today-mark {
-    min-height: 130px;
-    padding: 24px 0 26px;
-  }
-
-  .today-year {
-    font-size: 1.35rem;
-  }
-
-  .today-date {
-    font-size: 3.5rem;
-  }
+/* UI v6 — 分類樹沿用原站的直角、線條和強調色。 */
+.category-heading > span { letter-spacing:.12em; }
+.category-link { font-size:.84rem; }
+.category-link:hover { background:var(--accent-soft); }
+.category-expander:focus-visible,.category-link:focus-visible,
+.category-node-actions button:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+@media (max-width:640px) {
+  .category-section { padding:14px 0 18px; }
+  .category-heading { gap:8px; }
+  .category-link { font-size:.8rem; }
+  .category-list .category-list { margin-left:12px; padding-left:8px; }
+  .category-node-actions button { padding:3px 5px; }
+  .category-form-actions { justify-content:space-between; }
 }

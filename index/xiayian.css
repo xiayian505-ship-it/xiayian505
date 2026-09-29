@@ -73,3 +73,77 @@ input:focus,textarea:focus { outline:3px solid var(--accent); outline-offset:1px
 .button-wide { width:100%; margin-top:8px; }
 .form-error { min-height:1.5em; margin:10px 0; font-size:.82rem; }
 .form-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+
+/* 軍火庫 AuthPermissionUI：沿用個人頁原本的直向登入表單。 */
+#login-form[data-auth-form] { display:block; }
+
+/* 軍火庫 Confirm：原生 confirm/alert 全部不再使用，延續本站直角風格。 */
+.slowly-confirm.xiayian-confirm {
+  --confirm-backdrop:rgba(247,246,242,.82);
+  --confirm-surface:var(--white);
+  --confirm-text:var(--ink);
+  --confirm-muted:var(--muted);
+  --confirm-border:var(--ink);
+  --confirm-button-bg:var(--paper);
+  --confirm-button-text:var(--ink);
+  --confirm-confirm-bg:var(--accent);
+  --confirm-confirm-text:var(--ink);
+  --confirm-radius:0;
+  --confirm-shadow:8px 8px 0 rgba(23,23,23,.18);
+  font-family:"Noto Sans TC",system-ui,sans-serif;
+}
+.xiayian-confirm .slowly-confirm__button { font-weight:600; border-radius:0; }
+.xiayian-confirm .slowly-confirm__button--confirm { border:1px solid var(--ink); }
+
+/* 軍火庫 Toast 僅管顯示狀態；提示外觀由個人頁負責。 */
+.site-toast {
+  position:fixed;
+  z-index:11000;
+  right:24px;
+  bottom:24px;
+  max-width:min(420px,calc(100vw - 36px));
+  padding:12px 16px;
+  color:var(--white);
+  background:var(--ink);
+  border:1px solid var(--ink);
+  box-shadow:4px 4px 0 var(--danger);
+  font-size:.84rem;
+  overflow-wrap:anywhere;
+}
+
+/* 真正分頁：資料切頁交給 FictionPaginate；這裡只處理排版。 */
+.post-pages { display:flex; align-items:center; justify-content:flex-end; gap:14px; padding:22px 0 0; }
+.post-pages[hidden] { display:none; }
+.post-page-label { color:var(--muted); font-size:.82rem; font-variant-numeric:tabular-nums; }
+
+
+/* 分類樹：TreeSelection 只管理狀態；宿主負責 DOM 和節點關係。 */
+.category-section { border-bottom:1px solid var(--line); padding:18px 0 23px; }
+.category-heading { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:14px; font-weight:700; font-size:.82rem; }
+.category-status { margin:0 0 12px; color:var(--muted); font-size:.8rem; }
+.category-status:empty { display:none; }
+.category-tree { max-width:100%; overflow-x:auto; }
+.category-list { margin:0; padding:0; list-style:none; }
+.category-list .category-list { margin:0 0 0 21px; padding:0 0 0 13px; border-left:1px solid var(--line); }
+.category-node { padding:2px 0; }
+.category-row { display:flex; align-items:center; gap:6px; min-width:0; }
+.category-expander { flex:0 0 27px; min-width:27px; height:30px; border:0; padding:0; background:none; color:var(--ink); }
+.category-expander[disabled] { opacity:.24; cursor:default; }
+.category-link { flex:1 1 auto; min-width:0; width:100%; padding:5px 8px; text-align:left; border:1px solid transparent; background:transparent; color:var(--ink); }
+.category-link[aria-current="true"] { border-color:var(--ink); background:var(--accent-soft); font-weight:700; }
+.category-count { flex:0 0 auto; color:var(--muted); font-size:.73rem; font-variant-numeric:tabular-nums; }
+.category-node-actions { display:flex; flex:0 0 auto; gap:3px; }
+.category-node-actions button { padding:3px 7px; border:1px solid var(--line); background:transparent; color:var(--ink); font-size:.73rem; }
+.category-node-actions button:hover { border-color:var(--ink); }
+.category-empty { margin:10px 0 0; color:var(--muted); font-size:.78rem; }
+.category-form-actions { flex-wrap:wrap; }
+.button-danger { border-color:var(--danger); color:var(--danger); margin-right:auto; }
+#category-dialog { overflow:visible; }
+#category-dialog .slowly-select,
+#editor-dialog .slowly-select { --ss-bg:var(--white); --ss-text:var(--ink); --ss-border:var(--ink); --ss-hover:var(--paper); --ss-selected-bg:var(--accent-soft); --ss-selected-text:var(--ink); --ss-focus:var(--ink); }
+#category-dialog .slowly-select-trigger,
+#editor-dialog .slowly-select-trigger { border-radius:0; font-weight:400; }
+#category-dialog .slowly-select-menu,
+#editor-dialog .slowly-select-menu { box-shadow:3px 3px 0 var(--ink); }
+#category-dialog .slowly-select-option,
+#editor-dialog .slowly-select-option { border-radius:0; }

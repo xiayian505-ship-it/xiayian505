@@ -8,14 +8,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- 慢慢軍火庫：只引用公開零件，外觀由個人頁覆寫。 -->
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/responsive.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/confirm/confirm.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/Auth_permission_ui.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/component/calendar/calendar_component.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/toast.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/custom_select.css">
   <link rel="stylesheet" href="index/xiayian.css">
   <link rel="stylesheet" href="index/xiayian_style.css">
 </head>
 <body>
   <header class="site-header">
     <nav class="header-actions" aria-label="網站功能">
-      <span id="admin-badge" class="admin-badge" hidden>ADMIN</span>
-      <button id="new-post-button" class="button button-primary" type="button" hidden>寫字</button>
+      <span id="admin-badge" class="admin-badge" data-auth-visible="authenticated" hidden>ADMIN</span>
+      <button id="new-post-button" class="button button-primary" type="button" data-auth-visible="authenticated" hidden>寫字</button>
       <button id="auth-button" class="button button-quiet" type="button">登入</button>
     </nav>
   </header>
@@ -26,12 +33,8 @@
       <p class="intro-copy">寫自己想寫的字，說自己想說的話</p>
     </section>
 
-    <section class="today-mark" aria-label="今天日期">
-      <div class="today-mark-left">
-        <span id="today-month" class="today-month">—</span>
-        <span id="today-year" class="today-year">—</span>
-      </div>
-      <span id="today-date" class="today-date">—</span>
+    <section class="calendar-section" aria-label="日曆">
+      <div id="home-calendar"></div>
     </section>
 
     <section id="writing" class="posts-section" aria-labelledby="posts-title">
@@ -39,8 +42,21 @@
         <h2 id="posts-title">READ</h2>
         <p id="post-count" class="post-count" aria-live="polite"></p>
       </div>
+      <section id="category-section" class="category-section" aria-label="文章分類">
+        <div class="category-heading">
+          <span>分類</span>
+          <button id="new-category-button" class="button button-quiet" type="button" data-auth-visible="authenticated" hidden>＋ 新增分類</button>
+        </div>
+        <p id="category-status" class="category-status" role="status">正在讀取分類…</p>
+        <div id="category-tree" class="category-tree" aria-label="分類樹"></div>
+      </section>
       <div id="status" class="status" role="status">正在讀取文章…</div>
       <div id="posts" class="posts" aria-live="polite"></div>
+      <nav id="post-pages" class="post-pages" aria-label="文章分頁" hidden>
+        <button id="post-prev" class="button button-quiet" type="button">上一頁</button>
+        <span id="post-page-label" class="post-page-label" aria-live="polite"></span>
+        <button id="post-next" class="button button-quiet" type="button">下一頁</button>
+      </nav>
     </section>
   </main>
 
@@ -49,16 +65,18 @@
     <a class="footer-identity" href="https://stillnessbyslowly.com/" target="_blank" rel="noopener noreferrer">慢 慢 | stillness by slowly</a>
   </footer>
 
+  <div id="site-toast" class="slowly-toast site-toast" role="status" aria-live="polite"></div>
+
   <dialog id="login-dialog" aria-labelledby="login-title">
-    <form id="login-form" class="dialog-card">
+    <form id="login-form" class="dialog-card" data-auth-form>
       <button class="dialog-close" type="button" data-close="login-dialog" aria-label="關閉">×</button>
       <p class="dialog-kicker">ADMIN</p>
       <h2 id="login-title">登入</h2>
       <p class="form-intro">管理者入口。</p>
-      <label>電子郵件<input id="login-email" type="email" autocomplete="username" required></label>
-      <label>密碼<input id="login-password" type="password" autocomplete="current-password" required></label>
-      <p id="login-error" class="form-error" role="alert"></p>
-      <button class="button button-primary button-wide" type="submit">登入</button>
+      <label>電子郵件<input id="login-email" data-auth-account type="email" autocomplete="username" required></label>
+      <label>密碼<input id="login-password" data-auth-password type="password" autocomplete="current-password" required></label>
+      <p id="login-error" class="form-error" data-auth-message role="alert"></p>
+      <button class="button button-primary button-wide" data-auth-submit type="submit">登入</button>
     </form>
   </dialog>
 
@@ -70,13 +88,48 @@
       <input id="post-id" type="hidden">
       <label>標題<input id="post-title" type="text" maxlength="160" required></label>
       <label>內容<textarea id="post-content" rows="12"></textarea></label>
+      <label>文章分類<select id="post-category" data-slowly-select aria-label="文章分類"><option value="">未分類</option></select></label>
       <label class="checkbox"><input id="post-published" type="checkbox" checked><span>立即公開</span></label>
       <p id="editor-error" class="form-error" role="alert"></p>
       <div class="form-actions"><button class="button button-quiet" type="button" data-close="editor-dialog">取消</button><button class="button button-primary" type="submit">儲存</button></div>
     </form>
   </dialog>
 
+  <dialog id="category-dialog" aria-labelledby="category-dialog-title">
+    <form id="category-form" class="dialog-card">
+      <button class="dialog-close" type="button" data-close="category-dialog" aria-label="關閉">×</button>
+      <p class="dialog-kicker">CATEGORY</p>
+      <h2 id="category-dialog-title">新增分類</h2>
+      <input id="category-id" type="hidden">
+      <label>分類名稱<input id="category-name" type="text" maxlength="80" required></label>
+      <label>上層分類<select id="category-parent" data-slowly-select aria-label="上層分類"><option value="">最上層</option></select></label>
+      <p id="category-error" class="form-error" role="alert"></p>
+      <div class="form-actions category-form-actions">
+        <button id="category-delete" class="button button-quiet button-danger" type="button" hidden>刪除分類</button>
+        <button class="button button-quiet" type="button" data-close="category-dialog">取消</button>
+        <button id="category-save" class="button button-primary" type="submit">儲存</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+  <!-- 慢慢萬年曆：依照元件使用說明載入曆法資料與核心。 -->
+  <script src="https://lib.stillnessbyslowly.com/calendar/lunar_data.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/lunar.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/lunar_festivals_data.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/lunar_festivals.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/solar_festivals_data.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/solar_festivals.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/solar_terms_data.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/solar_terms.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/calendar.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/component/calendar/calendar_component.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/ui/confirm/confirm.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/ui/Auth_permission_ui.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/fiction/Fiction_paginate.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/ui/toast.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/ui/custom_select.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/state/tree_selection.js"></script>
   <script src="index/xiayian_style.js"></script>
   <script src="index/xiayian.js"></script>
 </body>
