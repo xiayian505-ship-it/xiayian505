@@ -165,6 +165,14 @@ input:focus,textarea:focus { outline:3px solid var(--accent); outline-offset:1px
 .rich-toolbar button:hover { border-color:var(--ink); background:var(--accent-soft); }
 .rich-toolbar button:disabled { opacity:.45; cursor:wait; }
 .rich-toolbar-divider { height:22px; width:1px; margin:0 3px; background:var(--line); }
+.rich-image-tools { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--line); background:var(--accent-soft); font-size:.79rem; }
+.rich-image-tools[hidden] { display:none!important; }
+.rich-image-tools span { margin-right:auto; font-weight:700; }
+.rich-image-tools button { min-height:36px; padding:5px 11px; border:1px solid var(--ink); border-radius:0; background:var(--white); color:var(--ink); font:inherit; cursor:pointer; }
+.rich-image-tools button:hover,.rich-image-tools button:focus-visible { background:var(--paper); outline:2px solid var(--ink); outline-offset:2px; }
+.rich-image-tools .rich-image-delete { background:var(--ink); color:var(--white); }
+.rich-image-tools .rich-image-delete:hover,.rich-image-tools .rich-image-delete:focus-visible { background:var(--ink); color:var(--accent); }
+.rich-image-tools button:disabled { opacity:.45; cursor:wait; }
 .rich-surface { min-height:300px; max-height:60dvh; overflow-y:auto; padding:18px; font-size:.94rem; line-height:1.8; white-space:pre-wrap; overflow-wrap:anywhere; outline:none; }
 .rich-surface:focus-visible { outline:3px solid var(--accent); outline-offset:-3px; }
 .rich-surface:empty::before { content:attr(data-placeholder); color:var(--muted); pointer-events:none; }
@@ -184,6 +192,8 @@ input:focus,textarea:focus { outline:3px solid var(--accent); outline-offset:1px
 .post-content :is(ul,ol),.rich-surface :is(ul,ol) { padding-left:1.5em; }
 .post-content blockquote,.rich-surface blockquote { padding:6px 0 6px 14px; border-left:3px solid var(--ink); color:var(--muted); }
 .post-content img,.rich-surface img { display:block; max-width:100%; height:auto; margin:16px 0; background:var(--paper); }
+.rich-surface img { cursor:pointer; }
+.rich-surface img.rich-image-selected { outline:3px solid var(--ink); outline-offset:3px; }
 .post-content a,.rich-surface a { text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; }
 .post-content pre,.rich-surface pre { padding:12px; overflow:auto; border:1px solid var(--line); background:var(--paper); white-space:pre-wrap; }
 .post-content :is(code,pre),.rich-surface :is(code,pre) { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }

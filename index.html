@@ -111,11 +111,16 @@
             <button id="insert-image-button" type="button" title="貼上圖床圖片網址">插圖</button>
             <button type="button" data-editor-command="removeFormat" title="清除文字格式">清除格式</button>
           </div>
+          <div id="selected-image-tools" class="rich-image-tools" role="group" aria-label="選取圖片操作" hidden>
+            <span>已選取圖片</span>
+            <button id="replace-image-button" type="button">修改網址</button>
+            <button id="delete-image-button" type="button" class="rich-image-delete">刪除圖片</button>
+          </div>
           <div id="post-visual" class="rich-surface" contenteditable="true" role="textbox" aria-multiline="true" aria-label="文章內容" data-placeholder="開始寫你的文章…" spellcheck="true"></div>
           <textarea id="post-html" class="rich-source" rows="14" aria-label="文章 HTML 原始碼" spellcheck="false" hidden></textarea>
           <textarea id="post-content" hidden aria-hidden="true" tabindex="-1"></textarea>
         </div>
-        <p class="editor-help">圖片只接受 HTTPS 圖床直連，不提供上傳；HTML 模式會過濾不安全的標籤及屬性。</p>
+        <p class="editor-help">圖片只接受 HTTPS 圖床直連，不提供上傳。點一下文章中的圖片即可修改網址或刪除；HTML 模式會過濾不安全的標籤及屬性。</p>
       </div>
       <label>文章分類<select id="post-category" data-slowly-select aria-label="文章分類"><option value="">未分類</option></select></label>
       <label class="checkbox"><input id="post-published" type="checkbox" checked><span>立即公開</span></label>
@@ -133,7 +138,7 @@
       <label>圖片網址<input id="image-url" type="url" placeholder="https://example.com/image.jpg" inputmode="url" required></label>
       <label>替代文字（選填）<input id="image-alt" type="text" maxlength="300" placeholder="簡單描述圖片內容"></label>
       <p id="image-error" class="form-error" role="alert"></p>
-      <div class="form-actions"><button class="button button-quiet" type="button" data-close="image-dialog">取消</button><button class="button button-primary" type="submit">插入圖片</button></div>
+      <div class="form-actions"><button class="button button-quiet" type="button" data-close="image-dialog">取消</button><button id="image-dialog-submit" class="button button-primary" type="submit">插入圖片</button></div>
     </form>
   </dialog>
 

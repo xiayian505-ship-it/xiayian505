@@ -139,8 +139,13 @@
     const toolbar = document.getElementById("editor-toolbar");
     const visualTab = document.getElementById("editor-visual-tab");
     const sourceTab = document.getElementById("editor-html-tab");
+    const imageTools = document.getElementById("selected-image-tools");
+    const replaceImageButton = document.getElementById("replace-image-button");
+    const deleteImageButton = document.getElementById("delete-image-button");
     const imageDialog = document.getElementById("image-dialog");
     const imageForm = document.getElementById("image-form");
+    const imageDialogTitle = document.getElementById("image-dialog-title");
+    const imageDialogSubmit = document.getElementById("image-dialog-submit");
     const imageURL = document.getElementById("image-url");
     const imageAlt = document.getElementById("image-alt");
     const imageError = document.getElementById("image-error");
@@ -152,7 +157,40 @@
     const editorError = elements["editor-error"];
     let mode = "visual";
     let selectedRange = null;
+    let selectedImage = null;
+    let editingImage = null;
     let busy = false;
+
+    function clearSelectedImage() {
+      selectedImage?.classList.remove("rich-image-selected");
+      selectedImage = null;
+      imageTools.hidden = true;
+    }
+
+    function selectImage(image) {
+      if (busy || mode !== "visual" || !image || !visual.contains(image)) return;
+      clearSelectedImage();
+      selectedImage = image;
+      selectedImage.classList.add("rich-image-selected");
+      imageTools.hidden = false;
+    }
+
+    function deleteSelectedImage() {
+      if (busy || mode !== "visual" || !selectedImage || !visual.contains(selectedImage)) return;
+      const image = selectedImage;
+      const range = document.createRange();
+      range.setStartBefore(image);
+      range.collapse(true);
+      clearSelectedImage();
+      image.remove();
+      visual.focus();
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      rememberRange();
+    }
 
     function rememberRange() {
       if (mode !== "visual" || !visual.isConnected) return;
@@ -213,6 +251,8 @@
     function switchMode(next) {
       if (busy || next === mode) return;
       try {
+        clearSelectedImage();
+        editingImage = null;
         if (next === "html") {
           const html = sanitizeArticleHTML(visual.innerHTML);
           hidden.value = html;
@@ -258,6 +298,30 @@
       rememberRange();
     });
 
+    // Mobile users can tap an image instead of trying to select an IMG node
+    // with the keyboard. The controls live outside contenteditable and are
+    // never included in the saved article HTML.
+    visual.addEventListener("click", function (event) {
+      const image = event.target.closest("img");
+      if (image) {
+        event.preventDefault();
+        selectImage(image);
+      }
+      else clearSelectedImage();
+    });
+    visual.addEventListener("keydown", function (event) {
+      if (selectedImage && (event.key === "Delete" || event.key === "Backspace")) {
+        event.preventDefault();
+        deleteSelectedImage();
+      } else if (!["Shift","Control","Alt","Meta"].includes(event.key)) {
+        clearSelectedImage();
+      }
+    });
+    deleteImageButton.addEventListener("click", deleteSelectedImage);
+    replaceImageButton.addEventListener("click", function () {
+      if (selectedImage && visual.contains(selectedImage)) openImageDialog(selectedImage);
+    });
+
     function pasteText(text) {
       restoreRange();
       if (!document.execCommand("insertText", false, text)) {
@@ -289,20 +353,42 @@
       siteToast.show("請透過工具列貼上圖床網址；不接受拖放上傳。");
     });
 
-    document.getElementById("insert-image-button").addEventListener("click", function () {
+    function openImageDialog(image = null) {
       if (busy || mode !== "visual") return;
       rememberRange();
+      editingImage = image && visual.contains(image) ? image : null;
       imageForm.reset(); imageError.textContent = "";
+      imageDialogTitle.textContent = editingImage ? "修改圖片網址" : "插入圖床圖片";
+      imageDialogSubmit.textContent = editingImage ? "儲存圖片" : "插入圖片";
+      if (editingImage) {
+        imageURL.value = editingImage.getAttribute("src") || "";
+        imageAlt.value = editingImage.getAttribute("alt") || "";
+      }
       imageDialog.showModal(); imageURL.focus();
+    }
+    document.getElementById("insert-image-button").addEventListener("click", function () {
+      openImageDialog();
     });
+    imageDialog.addEventListener("close", function () { editingImage = null; });
     imageForm.addEventListener("submit", function (event) {
       event.preventDefault();
       const src = articleURL(imageURL.value, "image");
       if (!src) { imageError.textContent = "請貼上 HTTPS 圖片直連，不支援上傳或 Base64。"; return; }
-      const img = document.createElement("img");
-      img.src = src; img.alt = imageAlt.value.trim().slice(0,300) || "文章圖片";
-      img.loading = "lazy"; img.decoding = "async";
-      imageDialog.close(); insertSafeNode(img);
+      const alt = imageAlt.value.trim().slice(0,300) || "文章圖片";
+      const image = editingImage && visual.contains(editingImage) ? editingImage : null;
+      imageDialog.close();
+      editingImage = null;
+      if (image) {
+        image.src = src;
+        image.alt = alt;
+        selectImage(image);
+      } else {
+        const img = document.createElement("img");
+        img.src = src; img.alt = alt;
+        img.loading = "lazy"; img.decoding = "async";
+        insertSafeNode(img);
+        selectImage(img);
+      }
       editorError.textContent = "";
     });
 
@@ -344,6 +430,8 @@
     return {
       load(value) {
         const html = sanitizeArticleHTML(value);
+        clearSelectedImage();
+        editingImage = null;
         hidden.value = html;
         source.value = html;
         visual.innerHTML = html;
@@ -352,6 +440,7 @@
         updateMode("visual");
       },
       getHTML() {
+        clearSelectedImage();
         const raw = mode === "visual" ? visual.innerHTML : source.value;
         const clean = sanitizeArticleHTML(raw);
         if (mode === "html" && clean.trim() !== raw.trim()) {
@@ -365,6 +454,7 @@
       },
       setBusy(value) {
         busy = Boolean(value);
+        if (busy) clearSelectedImage();
         updateMode(mode);
       }
     };
