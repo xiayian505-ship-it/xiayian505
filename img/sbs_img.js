@@ -39,6 +39,8 @@
   function normalizeImage(raw) {
     return {
       id: String(raw.id || raw.key), key: String(raw.key), name: String(raw.name || raw.key),
+      originalName: String(raw.originalName || raw.name || raw.key),
+      displayName: typeof raw.displayName === 'string' && raw.displayName ? raw.displayName : null,
       type: String(raw.type || "").toLowerCase(), size: Number(raw.size) || 0,
       createdAt: raw.createdAt || "1970-01-01T00:00:00.000Z",
       url: String(raw.url), thumbnailUrl: raw.thumbnailUrl || null,
@@ -72,7 +74,7 @@
     }
     function list(options = {}) {
       if (!ready) return { data: [], totalItems: 0, page: 1, totalPages: 1, hasPrevious: false, hasNext: false };
-      let rows = global.FictionSearch.search(all(), String(options.keyword || "").trim(), ["name"]);
+      let rows = global.FictionSearch.search(all(), String(options.keyword || "").trim(), ["name", "originalName"]);
       rows = global.FictionFilter.filter(rows, {
         equals: { type: options.type && options.type !== "all" ? options.type : null },
         boolean: { favorite: options.favoriteOnly ? true : null }
@@ -114,7 +116,7 @@
         if (version !== previewVersion) break;
         const originalUrl = URL.createObjectURL(file);
         const draft = {
-          id: `local:${version}:${index}`, file, name: file.name, type: file.type,
+          id: `local:${version}:${index}`, file, name: file.name, displayName: "", type: file.type,
           size: file.size, originalUrl, thumbUrl: originalUrl, thumbBlob: null,
           thumbSize: null, thumbState: file.type === "image/gif" ? "gif" : "processing"
         };
@@ -138,6 +140,13 @@
         }
       }
       return { selected: accepted.length, rejected, capped: valid.length > PREVIEW_CAP };
+    }
+    function setPendingName(id, name) {
+      if (uploading) return false;
+      const draft = pending.find(item => item.id === id);
+      if (!draft) return false;
+      draft.displayName = String(name ?? "").slice(0, 80);
+      return true;
     }
     function removePending(id) {
       if (uploading) return false;
@@ -244,7 +253,8 @@
           if (typeof onProgress === "function") onProgress(index + 1, drafts.length);
           try {
             const payload = await apiFetch("/images", {
-              method: "POST", headers: { "Content-Type": draft.type, "X-Image-Name": encodeURIComponent(draft.name) },
+              method: "POST", headers: { "Content-Type": draft.type, "X-Image-Name": encodeURIComponent(draft.name),
+                "X-Image-Title": encodeURIComponent(draft.displayName.trim()) },
               body: draft.file
             });
             results.succeeded++;
@@ -276,6 +286,28 @@
       }
       return results;
     }
+    async function renameImage(id, displayName) {
+      if (!session) throw new Error("請先登入管理員。");
+      const original = itemById(id);
+      if (!original) throw new Error("圖片不存在，請重新整理。");
+      const name = String(displayName ?? "").normalize("NFC").trim();
+      if (Array.from(name).length > 80 || /[\x00-\x1f\x7f]/.test(name)) {
+        throw new Error("圖片名稱最多 80 個字，且不能包含換行。");
+      }
+      const response = await apiFetch(`/images?key=${encodeURIComponent(original.key)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName: name })
+      });
+      if (!response?.image || response.image.key !== original.key) throw new Error("圖片名稱更新回應異常。");
+      refreshVersion++;
+      activeRefresh = null;
+      const updated = { ...original, name: String(response.image.name),
+        originalName: String(response.image.originalName || original.originalName),
+        displayName: response.image.displayName || null };
+      images = images.map(item => item.id === id ? updated : item);
+      emit("renamed", { id });
+      return { ...updated, favorite: favorites.has(id) };
+    }
     async function deleteImages(ids) {
       if (!session) throw new Error("請先登入管理員。");
       const unique = [...new Set(ids)].filter(id => itemById(id));
@@ -291,12 +323,12 @@
       return deleted;
     }
     return Object.freeze({
-      version: "2.0.0-r2", IMAGE_BASE, PAGE_SIZE, MAX_IMAGE_BYTES,
+      version: "2.1.0-r2-names", IMAGE_BASE, PAGE_SIZE, MAX_IMAGE_BYTES,
       init, initAuth, login, logout, isAdmin: () => !!session, isUploading: () => uploading,
-      formatSize, list, all, itemById, refreshImages, uploadPending, deleteImages,
-      pending: () => [...pending], chooseFiles, discardPending, removePending,
+      formatSize, list, all, itemById, refreshImages, uploadPending, deleteImages, renameImage,
+      pending: () => [...pending], chooseFiles, discardPending, removePending, setPendingName,
       setFavorite, subscribe: listener => changes.subscribe(listener)
     });
   }
-  global.SbsImg = Object.freeze({ create, formatSize, IMAGE_BASE, version: "2.0.0-r2" });
+  global.SbsImg = Object.freeze({ create, formatSize, IMAGE_BASE, version: "2.1.0-r2-names" });
 })(window);

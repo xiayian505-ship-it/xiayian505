@@ -109,6 +109,18 @@
         const info = document.createElement("div");
         info.className = "upload-item-text";
         info.appendChild(text("strong", draft.name));
+        const label = text("label", "圖片名稱", "upload-name-field");
+        const nameInput = document.createElement("input");
+        nameInput.type = "text";
+        nameInput.maxLength = 80;
+        nameInput.autocomplete = "off";
+        nameInput.placeholder = "圖片名稱（選填）";
+        nameInput.value = draft.displayName;
+        nameInput.disabled = busy;
+        nameInput.setAttribute("aria-label", `${draft.name} 的圖片名稱`);
+        nameInput.addEventListener("input", () => app.setPendingName(draft.id, nameInput.value));
+        label.appendChild(nameInput);
+        info.appendChild(label);
         const remove = button("移除", "button button-quiet button-small");
         remove.disabled = busy;
         remove.setAttribute("aria-label", `從待上傳清單移除 ${draft.name}`);
@@ -239,11 +251,16 @@
       if (!item) return;
       currentDetailId = id;
       $("detailTitle").textContent = item.name;
+      $("detailNameInput").value = item.displayName || "";
+      $("detailNameError").hidden = true;
+      $("detailNameError").textContent = "";
+      $("detailNameSave").disabled = false;
       $("detailPreview").replaceChildren(media(item, true));
       const info = $("detailInfo");
       info.replaceChildren();
       infoPair(info, "類型", item.type.toUpperCase());
       infoPair(info, "大小", app.formatSize(item.size));
+      infoPair(info, "R2 檔名", item.originalName);
       infoPair(info, "圖片網址", item.url);
       $("detailCopy").disabled = !item.url;
       detailDialog.showModal();
@@ -379,6 +396,28 @@
       catch (error) { feedback(`批次操作失敗：${error.message}`); }
     });
     $("batchRemove").addEventListener("click", () => removeImages([...batchSelection]));
+    $("detailRenameForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      const id = currentDetailId;
+      if (!id) return;
+      const save = $("detailNameSave");
+      const errorEl = $("detailNameError");
+      errorEl.hidden = true;
+      errorEl.textContent = "";
+      save.disabled = true;
+      save.textContent = "儲存中…";
+      try {
+        const updated = await app.renameImage(id, $("detailNameInput").value);
+        if (currentDetailId === id) {
+          $("detailTitle").textContent = updated.name;
+          $("detailNameInput").value = updated.displayName || "";
+        }
+        notify("圖片名稱已儲存");
+      } catch (error) {
+        errorEl.textContent = error.message || "名稱儲存失敗";
+        errorEl.hidden = false;
+      } finally { save.disabled = false; save.textContent = "儲存"; }
+    });
     $("detailCopy").addEventListener("click", () => copyUrl(app.itemById(currentDetailId)));
     $("detailRemove").addEventListener("click", () => currentDetailId && removeImages([currentDetailId]));
     tabs.root.addEventListener("slowlytabschange", () => feedback(""));

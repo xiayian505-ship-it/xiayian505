@@ -68,8 +68,8 @@
 
 <div class="library-toolbar">
 <div class="toolbar-field toolbar-search">
-<label class="sr-only" for="imageSearch">搜尋檔名</label>
-<input autocomplete="off" id="imageSearch" inputmode="search" placeholder="搜尋檔名" type="search"/>
+<label class="sr-only" for="imageSearch">搜尋圖片名稱或檔名</label>
+<input autocomplete="off" id="imageSearch" inputmode="search" placeholder="搜尋圖片" type="search"/>
 </div>
 <div class="toolbar-field">
 <label class="sr-only" for="imageType">圖片類型</label>
@@ -80,7 +80,7 @@
 <div class="toolbar-field">
 <label class="sr-only" for="imageSort">排序方式</label>
 <select aria-label="圖片排序方式" data-slowly-select="" id="imageSort">
-<option value="new">最新優先</option><option value="old">最舊優先</option><option value="name">檔名 A–Z</option><option value="size">檔案最大優先</option>
+<option value="new">最新優先</option><option value="old">最舊優先</option><option value="name">名稱 A–Z</option><option value="size">檔案最大優先</option>
 </select>
 </div>
 <label class="favorite-switch" for="favoriteOnly"><input id="favoriteOnly" type="checkbox"/><span aria-hidden="true" class="switch-box">✓</span><span>只看收藏</span></label>
@@ -139,6 +139,11 @@
 <dialog aria-labelledby="detailTitle" class="image-dialog" id="imageDialog">
 <div class="dialog-heading"><div><h2 id="detailTitle">圖片資訊</h2></div><button aria-label="關閉圖片資訊" class="dialog-close" id="closeDetail" type="button">×</button></div>
 <div class="detail-preview" id="detailPreview"></div>
+<form class="detail-rename" id="detailRenameForm">
+<label for="detailNameInput">圖片名稱</label>
+<div class="detail-rename-row"><input autocomplete="off" id="detailNameInput" maxlength="80" placeholder="圖片名稱（選填）" type="text"/><button class="button button-primary" id="detailNameSave" type="submit">儲存</button></div>
+<p class="detail-name-error" hidden="" id="detailNameError" role="alert"></p>
+</form>
 <dl class="detail-info" id="detailInfo"></dl>
 <div class="detail-actions"><button class="button button-primary" id="detailCopy" type="button">複製圖片網址</button><button class="button button-danger" id="detailRemove" type="button">永久刪除</button></div>
 
