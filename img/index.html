@@ -115,7 +115,25 @@
 <button class="button button-danger" disabled="" id="batchRemove" type="button">永久刪除</button>
 </div>
 </section>
-<section aria-label="設定" class="view-panel" data-view-panel="settings" hidden=""></section>
+<section aria-label="設定" class="view-panel" data-view-panel="settings" hidden="">
+<div class="usage-heading">
+<h2>R2 用量</h2>
+<button class="button button-quiet button-small" id="usageRefresh" type="button">重新統計</button>
+</div>
+<p class="usage-status" id="usageStatus" aria-live="polite">請先登入</p>
+<div class="usage-grid">
+<article class="usage-cell"><span>圖片</span><strong id="usageImageCount">—</strong></article>
+<article class="usage-cell"><span>目前儲存</span><strong id="usageStorage">—</strong><small id="usageStorageDetail"></small></article>
+<article class="usage-cell"><span>A 類操作</span><strong id="usageClassA">—</strong><span class="usage-track"><span id="usageClassABar"></span></span><small id="usageClassALimit"></small></article>
+<article class="usage-cell"><span>B 類操作</span><strong id="usageClassB">—</strong><span class="usage-track"><span id="usageClassBBar"></span></span><small id="usageClassBLimit"></small></article>
+</div>
+<p class="usage-period" id="usagePeriod"></p>
+<p class="usage-warning" id="usageWarning" role="alert" hidden=""></p>
+<div class="usage-links">
+<a href="https://dash.cloudflare.com/" rel="noopener noreferrer" target="_blank">Cloudflare 帳單／Email 警告 ↗</a>
+<a href="https://developers.cloudflare.com/billing/manage/budget-alerts/" rel="noopener noreferrer" target="_blank">警告設定步驟 ↗</a>
+</div>
+</section>
 </div>
 <p aria-live="polite" class="feedback" hidden="" id="feedback" role="alert"></p>
 

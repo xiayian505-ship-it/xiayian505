@@ -33,6 +33,101 @@
     let currentDetailId = null;
     const batchSelection = new Set();
     let favoriteInstances = [];
+    let usageBusy = false;
+    let usageLoaded = false;
+    let usageRequestId = 0;
+
+    function usageReset() {
+      usageRequestId++;
+      usageLoaded = false;
+      usageBusy = false;
+      for (const id of ["usageImageCount", "usageStorage", "usageClassA", "usageClassB"]) $(id).textContent = "—";
+      for (const id of ["usageStorageDetail", "usageClassALimit", "usageClassBLimit", "usagePeriod"]) $(id).textContent = "";
+      for (const id of ["usageClassABar", "usageClassBBar"]) $(id).style.width = "0%";
+      $("usageWarning").hidden = true;
+      $("usageWarning").textContent = "";
+      $("usageStatus").textContent = app.isAdmin() ? "按重新統計" : "請先登入";
+      $("usageRefresh").disabled = !app.isAdmin();
+    }
+    function formatUsageBytes(bytes) {
+      if (!Number.isFinite(bytes) || bytes < 0) return "—";
+      const names = ["B", "KB", "MB", "GB", "TB"];
+      let value = bytes, unit = 0;
+      while (value >= 1000 && unit < names.length - 1) { value /= 1000; unit++; }
+      return `${value.toLocaleString("zh-TW", { maximumFractionDigits: 2 })} ${names[unit]}`;
+    }
+    function usageOperationRow(value, max, countId, barId, limitId) {
+      const valid = Number.isSafeInteger(value) && value >= 0;
+      $(countId).textContent = valid ? value.toLocaleString("zh-TW") : "—";
+      $(limitId).textContent = valid ? `${Math.min(100, value / max * 100).toFixed(1)}% / ${max.toLocaleString("zh-TW")}` : "未取得";
+      $(barId).style.width = valid ? `${Math.min(100, value / max * 100)}%` : "0%";
+      $(barId).classList.toggle("usage-near", valid && value >= max * .8);
+      $(barId).classList.toggle("usage-over", valid && value >= max);
+    }
+    async function loadUsage() {
+      if (!app.isAdmin()) { usageReset(); return; }
+      if (usageBusy) return;
+      usageBusy = true;
+      const ticket = ++usageRequestId;
+      $("usageRefresh").disabled = true;
+      $("usageStatus").textContent = "統計中…";
+      $("usageWarning").hidden = true;
+      const warnings = [];
+      let capacityOkay = false;
+      let operationsOkay = false;
+      try {
+        try {
+          const totals = await app.getBucketUsage(({ pages }) => {
+            if (ticket === usageRequestId) $("usageStatus").textContent = `統計中… ${pages} 頁`;
+          });
+          if (ticket !== usageRequestId) return;
+          $("usageImageCount").textContent = totals.imageCount.toLocaleString("zh-TW");
+          $("usageStorage").textContent = formatUsageBytes(totals.totalBytes);
+          $("usageStorageDetail").textContent = `原圖 ${formatUsageBytes(totals.imageBytes)}｜縮圖 ${formatUsageBytes(totals.thumbnailBytes)}`;
+          capacityOkay = true;
+          if (totals.infrequentBytes > 0) warnings.push("含低頻存取物件；免費額度不適用，請核對 Cloudflare 帳單。");
+          if (totals.standardBytes >= 8 * 1000 ** 3) warnings.push("目前儲存量已接近 10 GB 參考值；費用依 GB-month 計算。");
+        } catch (error) {
+          if (ticket !== usageRequestId) return;
+          warnings.push(`容量統計失敗：${error.message}`);
+          for (const id of ["usageImageCount", "usageStorage"]) $(id).textContent = "—";
+          $("usageStorageDetail").textContent = "";
+        }
+        if (ticket !== usageRequestId) return;
+        $("usageStatus").textContent = "正在取得操作用量…";
+        try {
+          const result = await app.getOperationsUsage();
+          if (ticket !== usageRequestId) return;
+          const period = result.period;
+          $("usagePeriod").textContent = period?.start ?
+            `操作統計：${period.start.slice(0, 10).replaceAll("-", "/")} 起（UTC）｜非正式帳單` : "";
+          const ready = result.status === "ok";
+          usageOperationRow(ready ? result.classA : null, 1_000_000,
+            "usageClassA", "usageClassABar", "usageClassALimit");
+          usageOperationRow(ready ? result.classB : null, 10_000_000,
+            "usageClassB", "usageClassBBar", "usageClassBLimit");
+          if (ready) {
+            operationsOkay = true;
+            if (result.classA >= 800_000) warnings.push("A 類操作已達免費額度的 80% 以上。");
+            if (result.classB >= 8_000_000) warnings.push("B 類操作已達免費額度的 80% 以上。");
+          } else if (result.status === "not-configured") {
+            warnings.push("操作統計尚未接 Cloudflare Analytics；無法判斷本期是否超額。");
+          } else {
+            warnings.push("操作統計資料未取得或不完整；請直接查看 Cloudflare 帳單。");
+          }
+        } catch (error) {
+          if (ticket !== usageRequestId) return;
+          warnings.push(`操作統計失敗：${error.message}`);
+        }
+        if (ticket !== usageRequestId) return;
+        $("usageStatus").textContent = capacityOkay && operationsOkay ? "統計完成" : "統計未完成";
+        $("usageWarning").textContent = warnings.join(" ");
+        $("usageWarning").hidden = warnings.length === 0;
+        usageLoaded = true;
+      } finally {
+        if (ticket === usageRequestId) { usageBusy = false; $("usageRefresh").disabled = !app.isAdmin(); }
+      }
+    }
 
     function feedback(message) {
       const el = $("feedback");
@@ -318,10 +413,14 @@
       if (admin) {
         // Supabase auth state 回呼期間不直接呼叫其他 Auth 方法，避免重入鎖定。
         setTimeout(() => {
-          if (app.isAdmin()) app.refreshImages().catch(error => feedback(`無法載入圖片庫：${error.message}`));
+          if (app.isAdmin()) {
+            app.refreshImages().catch(error => feedback(`無法載入圖片庫：${error.message}`));
+            if (tabs.current === "settings" && !usageLoaded) loadUsage();
+          }
         }, 0);
       } else {
         batchSelection.clear();
+        usageReset();
         renderAll();
       }
     }
@@ -420,10 +519,15 @@
     });
     $("detailCopy").addEventListener("click", () => copyUrl(app.itemById(currentDetailId)));
     $("detailRemove").addEventListener("click", () => currentDetailId && removeImages([currentDetailId]));
-    tabs.root.addEventListener("slowlytabschange", () => feedback(""));
+    $("usageRefresh").addEventListener("click", () => loadUsage());
+    tabs.root.addEventListener("slowlytabschange", event => {
+      feedback("");
+      if (event.detail?.name === "settings" && !usageLoaded) loadUsage();
+    });
     app.subscribe(() => renderAll());
 
     renderAll();
+    usageReset();
     await app.init();
     try { await app.initAuth(updateAuth); }
     catch (error) { $("authFeedback").textContent = `無法登入：${error.message}`; $("authFeedback").hidden = false; feedback("登入服務連線失敗。"); }

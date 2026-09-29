@@ -215,6 +215,36 @@
       if (!response.ok) throw new Error(payload.error || `R2 操作失敗（HTTP ${response.status}）。`);
       return payload;
     }
+    async function getBucketUsage(onProgress) {
+      if (!session) throw new Error("請先登入管理員。");
+      const fields = ["objectCount", "imageCount", "thumbnailCount", "otherCount", "totalBytes",
+        "standardBytes", "infrequentBytes", "imageBytes", "thumbnailBytes", "otherBytes"];
+      const totals = Object.fromEntries(fields.map(key => [key, 0]));
+      let cursor = null;
+      const seen = new Set();
+      let pages = 0;
+      do {
+        const page = await apiFetch("/usage" + (cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""));
+        if (++pages > 10000) throw new Error("物件數量太多，請改從 Cloudflare 儀表板查看。");
+        if (!page?.totals || typeof page.totals !== "object") throw new Error("容量統計回應不完整。");
+        for (const key of fields) {
+          const value = Number(page.totals[key]);
+          if (!Number.isSafeInteger(value) || value < 0 || !Number.isSafeInteger(totals[key] + value)) {
+            throw new Error("容量統計數字無效。");
+          }
+          totals[key] += value;
+        }
+        cursor = page.cursor || null;
+        if (cursor && seen.has(cursor)) throw new Error("容量統計游標重複，已停止統計。");
+        if (cursor) seen.add(cursor);
+        if (typeof onProgress === "function") onProgress({ ...totals, pages, done: !cursor });
+      } while (cursor);
+      return totals;
+    }
+    async function getOperationsUsage() {
+      if (!session) throw new Error("請先登入管理員。");
+      return apiFetch("/usage/operations");
+    }
     async function refreshImages() {
       if (!session) { images = []; emit("images-cleared"); return []; }
       if (activeRefresh) return activeRefresh;
@@ -326,6 +356,7 @@
       version: "2.1.0-r2-names", IMAGE_BASE, PAGE_SIZE, MAX_IMAGE_BYTES,
       init, initAuth, login, logout, isAdmin: () => !!session, isUploading: () => uploading,
       formatSize, list, all, itemById, refreshImages, uploadPending, deleteImages, renameImage,
+      getBucketUsage, getOperationsUsage,
       pending: () => [...pending], chooseFiles, discardPending, removePending, setPendingName,
       setFavorite, subscribe: listener => changes.subscribe(listener)
     });
