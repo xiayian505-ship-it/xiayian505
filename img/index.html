@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1,viewport-fit=cover" name="viewport"/>
+<meta content="light" name="color-scheme"/>
+<title>慢 慢 | 圖片</title>
+<!-- 軍火庫零件：HTTPS 絕對路徑引用，不在本專案複製任何共用函式。 -->
+<link href="https://lib.stillnessbyslowly.com/ui/responsive.css" rel="stylesheet"/>
+<link href="https://lib.stillnessbyslowly.com/ui/tabs/tabs.css" rel="stylesheet"/>
+<link href="https://lib.stillnessbyslowly.com/ui/toast.css" rel="stylesheet"/>
+<link href="https://lib.stillnessbyslowly.com/ui/Auth_permission_ui.css" rel="stylesheet"/>
+<link href="https://lib.stillnessbyslowly.com/ui/confirm/confirm.css" rel="stylesheet"/>
+<link href="https://lib.stillnessbyslowly.com/ui/custom_select.css" rel="stylesheet"/>
+<link href="https://lib.stillnessbyslowly.com/ui/custom_file.css" rel="stylesheet"/>
+<link href="https://lib.stillnessbyslowly.com/ui/favorite.css" rel="stylesheet"/>
+<link href="./sbs_img.css" rel="stylesheet"/>
+<link href="./sbs_img_style.css" rel="stylesheet"/>
+</head>
+<body>
+<main class="img-page" id="imgPage">
+<header class="page-heading">
+<div>
+
+<h1>慢 慢 | 圖片</h1>
+
+</div>
+<button aria-controls="manageDialog" aria-haspopup="dialog" class="manage-button" id="manageButton" type="button">
+<span aria-hidden="true" class="auth-indicator" id="authIndicator"></span>管理
+      </button>
+</header>
+
+<div data-slowly-tabs="" id="imgTabs">
+<nav aria-label="圖床管理功能分頁" class="view-tabs" role="tablist">
+<button aria-selected="true" data-view-target="upload" role="tab" type="button">上傳圖片</button>
+<button aria-selected="false" data-view-target="gallery" role="tab" type="button">圖片庫</button>
+<button aria-selected="false" data-view-target="batch" role="tab" type="button">批次整理</button>
+<button aria-selected="false" data-view-target="settings" role="tab" type="button">設定</button>
+</nav>
+<section aria-label="上傳圖片" class="view-panel" data-view-panel="upload">
+
+<div class="upload-box">
+
+<div class="slowly-file picker-control" data-default-label="未選圖" id="imagePicker">
+<input accept="image/jpeg,image/png,image/webp,image/gif" aria-label="選擇要上傳的圖片" class="slowly-file-native" id="imageFiles" multiple="" type="file"/>
+<button class="slowly-file-trigger" type="button">選擇圖片</button>
+<span aria-live="polite" class="slowly-file-label">未選圖</span>
+</div>
+
+</div>
+<section aria-labelledby="previewTitle" class="upload-preview" hidden="" id="uploadPreview">
+<div class="subsection-heading">
+<h3 id="previewTitle">待上傳預覽 <span class="count-badge" id="pendingCount">0</span></h3>
+<button class="button button-quiet" disabled="" id="clearFiles" type="button">清除本次選圖</button>
+</div>
+
+<div class="upload-preview-list" hidden="" id="uploadPreviewList"></div>
+<div class="upload-actions">
+<button class="button button-primary" disabled="" id="uploadToR2" type="button">上傳圖片</button>
+
+</div>
+</section>
+<div class="uploaded-results" hidden="" id="uploadedResult"></div>
+</section>
+<section aria-label="圖片庫" class="view-panel" data-view-panel="gallery" hidden="">
+
+
+<div class="library-toolbar">
+<div class="toolbar-field toolbar-search">
+<label class="sr-only" for="imageSearch">搜尋檔名</label>
+<input autocomplete="off" id="imageSearch" inputmode="search" placeholder="搜尋檔名" type="search"/>
+</div>
+<div class="toolbar-field">
+<label class="sr-only" for="imageType">圖片類型</label>
+<select aria-label="篩選圖片類型" data-slowly-select="" id="imageType">
+<option value="all">全部類型</option><option value="jpg">JPG</option><option value="png">PNG</option><option value="webp">WebP</option><option value="gif">GIF</option>
+</select>
+</div>
+<div class="toolbar-field">
+<label class="sr-only" for="imageSort">排序方式</label>
+<select aria-label="圖片排序方式" data-slowly-select="" id="imageSort">
+<option value="new">最新優先</option><option value="old">最舊優先</option><option value="name">檔名 A–Z</option><option value="size">檔案最大優先</option>
+</select>
+</div>
+<label class="favorite-switch" for="favoriteOnly"><input id="favoriteOnly" type="checkbox"/><span aria-hidden="true" class="switch-box">✓</span><span>只看收藏</span></label>
+</div>
+<div class="list-heading"><span id="gallerySummary"></span><button class="button button-quiet button-small" id="refreshGallery" type="button">重新整理</button></div>
+<div class="empty-panel" hidden="" id="galleryEmpty">沒有圖片</div>
+<div aria-live="polite" class="image-grid" id="galleryGrid"></div>
+<div class="pager" hidden="" id="galleryPager">
+<button class="button button-quiet" id="galleryPrev" type="button">上一頁</button>
+<span aria-live="polite" id="galleryPageLabel">第 1 頁</span>
+<button class="button button-quiet" id="galleryNext" type="button">下一頁</button>
+</div>
+</section>
+<section aria-label="批次整理" class="view-panel" data-view-panel="batch" hidden="">
+
+<div class="batch-toolbar">
+<div><strong>已選取 <span id="batchCount">0</span> 張</strong></div>
+<div class="batch-actions">
+<button class="button button-quiet" id="batchSelectPage" type="button">全選本頁</button>
+<button class="button button-quiet" disabled="" id="batchClear" type="button">清除選取</button>
+</div>
+</div>
+<div aria-live="polite" class="image-grid batch-grid" id="batchGrid"></div>
+<div class="pager" hidden="" id="batchPager">
+<button class="button button-quiet" id="batchPrev" type="button">上一頁</button>
+<span aria-live="polite" id="batchPageLabel">第 1 頁</span>
+<button class="button button-quiet" id="batchNext" type="button">下一頁</button>
+</div>
+<div class="batch-bottom-actions">
+<button class="button" disabled="" id="batchFavorite" type="button">加入收藏</button>
+<button class="button" disabled="" id="batchUnfavorite" type="button">取消收藏</button>
+<button class="button button-danger" disabled="" id="batchRemove" type="button">永久刪除</button>
+</div>
+</section>
+<section aria-label="設定" class="view-panel" data-view-panel="settings" hidden=""></section>
+</div>
+<p aria-live="polite" class="feedback" hidden="" id="feedback" role="alert"></p>
+
+</main>
+<dialog aria-labelledby="manageTitle" class="manage-dialog" id="manageDialog">
+<div class="dialog-heading"><div><h2 id="manageTitle">管理員登入</h2></div><button aria-label="關閉管理視窗" class="dialog-close" id="closeManage" type="button">×</button></div>
+<form autocomplete="on" data-auth-form="" id="loginForm">
+<label>電子郵件<input autocomplete="username" data-auth-account="" id="loginEmail" inputmode="email" placeholder="name@example.com" required="" type="email"/></label>
+<label>密碼<input autocomplete="current-password" data-auth-password="" id="loginPassword" placeholder="你的管理員密碼" required="" type="password"/></label>
+<p class="form-error" data-auth-message="" role="alert"></p>
+<button class="button button-primary login-submit" data-auth-submit="" type="submit">登入</button>
+</form>
+<div class="signed-in-panel" data-auth-visible="authenticated" hidden="">
+
+<p class="signed-in-email" id="loggedInEmail">—</p>
+
+<button class="button button-danger" data-auth-logout="" type="button">登出</button>
+</div>
+
+<p class="form-error" hidden="" id="authFeedback" role="alert"></p></dialog>
+<dialog aria-labelledby="detailTitle" class="image-dialog" id="imageDialog">
+<div class="dialog-heading"><div><h2 id="detailTitle">圖片資訊</h2></div><button aria-label="關閉圖片資訊" class="dialog-close" id="closeDetail" type="button">×</button></div>
+<div class="detail-preview" id="detailPreview"></div>
+<dl class="detail-info" id="detailInfo"></dl>
+<div class="detail-actions"><button class="button button-primary" id="detailCopy" type="button">複製圖片網址</button><button class="button button-danger" id="detailRemove" type="button">永久刪除</button></div>
+
+</dialog>
+<div aria-live="polite" class="slowly-toast img-toast" id="imgToast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script src="https://lib.stillnessbyslowly.com/ui/tabs/tabs.js"></script>
+<script src="https://lib.stillnessbyslowly.com/ui/toast.js"></script>
+<script src="https://lib.stillnessbyslowly.com/ui/clipboard/clipboard_copy.js"></script>
+<script src="https://lib.stillnessbyslowly.com/ui/Auth_permission_ui.js"></script>
+<script src="https://lib.stillnessbyslowly.com/ui/confirm/confirm.js"></script>
+<script src="https://lib.stillnessbyslowly.com/ui/custom_select.js"></script>
+<script src="https://lib.stillnessbyslowly.com/ui/custom_file.js"></script>
+<script src="https://lib.stillnessbyslowly.com/ui/favorite.js"></script>
+<script src="https://lib.stillnessbyslowly.com/fiction/Fiction_search.js"></script>
+<script src="https://lib.stillnessbyslowly.com/fiction/Fiction_filter.js"></script>
+<script src="https://lib.stillnessbyslowly.com/fiction/Fiction_sort.js"></script>
+<script src="https://lib.stillnessbyslowly.com/fiction/Fiction_paginate.js"></script>
+<script src="https://lib.stillnessbyslowly.com/fiction/Fiction_storage.js"></script>
+<script src="https://lib.stillnessbyslowly.com/fiction/Fiction_change.js"></script>
+<script src="https://lib.stillnessbyslowly.com/Image/image_compress_to_size.js"></script>
+<script src="./sbs_img.js"></script>
+<script src="./sbs_img_style.js"></script>
+</body>
+</html>
+
