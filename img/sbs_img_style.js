@@ -341,7 +341,7 @@
           global.SlowlyCustomFile.reset("#imagePicker");
           notify(`已上傳 ${result.succeeded} 張圖片`);
         }
-        if (result.failed.length) feedback(`上傳失敗：${result.failed.map(item => item.name).join("、")}。可以再按上傳重試。`);
+        if (result.failed.length) feedback(`上傳失敗：${result.failed.map(item => `${item.name}：${item.message || "未知錯誤"}`).join("；")}。`);
         else if (result.refreshError) feedback(`圖片已上傳，但圖片庫重新整理失敗：${result.refreshError}`);
         else if (result.thumbnailFailures) notify(`圖片已上傳；${result.thumbnailFailures} 張縮圖未完成`);
       } catch (error) { feedback(`上傳失敗：${error.message}`); }
