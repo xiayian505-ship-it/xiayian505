@@ -683,6 +683,17 @@
       const toggle = document.createElement("button"); toggle.className = "post-toggle"; toggle.type = "button"; toggle.textContent = "›"; toggle.setAttribute("aria-label", `展開「${post.title}」內文`); toggle.setAttribute("aria-expanded", "false");
       const details = document.createElement("div"); details.className = "post-details";
       const content = document.createElement("div"); content.className = "post-content"; renderArticleContent(content, post.content);
+      if (window.ReadingStats?.summarize) {
+        try {
+          const reading = window.ReadingStats.summarize(content.textContent);
+          const readingMeta = document.createElement("span");
+          readingMeta.className = "post-reading-stats";
+          readingMeta.textContent = `約 ${reading.characters.toLocaleString("zh-Hant-TW")} 字・閱讀時間約 ${reading.minutes} 分鐘`;
+          meta.append(readingMeta);
+        } catch (error) {
+          console.error("reading stats unavailable", error);
+        }
+      }
       heading.append(title, toggle); details.append(meta, content); article.append(heading, details);
       toggle.addEventListener("click", function () {
         const willOpen = !article.classList.contains("is-open");

@@ -45,7 +45,8 @@ main { max-width:var(--max); margin:auto; padding:72px 24px 0; }
 .post-card.is-open .post-toggle { transform:rotate(90deg); }
 .post-details { display:none; padding-top:22px; }
 .post-card.is-open .post-details { display:block; }
-.post-meta { display:flex; gap:10px; align-items:center; margin-bottom:12px; color:var(--muted); font-size:.72rem; }
+.post-meta { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px; color:var(--muted); font-size:.72rem; }
+.post-reading-stats { white-space:nowrap; }
 .draft { color:var(--ink); background:var(--accent); padding:1px 7px; font-weight:700; }
 .post-content { max-width:760px; white-space:pre-wrap; overflow-wrap:anywhere; color:#45423e; }
 .post-actions { display:flex; gap:8px; margin-top:22px; }
