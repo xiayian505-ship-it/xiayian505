@@ -1,0 +1,110 @@
+/* cycle_style.css
+ * 頁面 UI 微調層。
+ * 功能相關樣式放在 cycle.css；這裡只處理頁面層級的互動外觀。
+ */
+
+.slowly-confirm.cycle-confirm {
+  --confirm-surface: #fffaf9;
+  --confirm-text: #3c3433;
+  --confirm-muted: #807472;
+  --confirm-confirm-bg: #a86f72;
+  --confirm-confirm-text: #ffffff;
+  --confirm-radius: 0;
+}
+
+#recordCrud .slowly-date,
+#recordCrud .slowly-select {
+  width: 100%;
+}
+
+#recordCrud .slowly-date-trigger,
+#recordCrud .slowly-select-trigger {
+  width: 100%;
+}
+
+#recordCrud .slowly-date-panel,
+#recordCrud .slowly-select-menu {
+  z-index: 20;
+}
+
+#recordCrud .sdc-control:focus,
+.number-field input:focus {
+  outline: 2px solid color-mix(in srgb, var(--cycle-accent) 45%, transparent);
+  outline-offset: 2px;
+}
+
+
+/* cycle 視覺原則：平面、直角，不使用卡片陰影或膠囊圓角。 */
+.cycle-page *,
+.cycle-page *::before,
+.cycle-page *::after,
+.slowly-confirm.cycle-confirm,
+.slowly-confirm.cycle-confirm *,
+.slowly-confirm.cycle-confirm *::before,
+.slowly-confirm.cycle-confirm *::after {
+  box-shadow: none !important;
+}
+
+.cycle-page button,
+.cycle-page input,
+.cycle-page textarea,
+.cycle-page select,
+.cycle-page .slowly-calendar,
+.cycle-page .slowly-data-crud,
+.cycle-page .slowly-date,
+.cycle-page .slowly-date-trigger,
+.cycle-page .slowly-date-panel,
+.cycle-page .slowly-date-day,
+.cycle-page .slowly-select,
+.cycle-page .slowly-select-trigger,
+.cycle-page .slowly-select-menu,
+.cycle-page .slowly-select-option,
+.cycle-page .slowly-file,
+.cycle-page .slowly-file-trigger,
+.cycle-page .selected-day-card,
+.cycle-page .backup-card,
+.cycle-page .settings-card,
+.cycle-page .history-card,
+.cycle-page .stat-card,
+.cycle-page .selected-event,
+.cycle-page .count-pill,
+.slowly-confirm.cycle-confirm .slowly-confirm__dialog,
+.slowly-confirm.cycle-confirm .slowly-confirm__button {
+  border-radius: 0 !important;
+}
+
+/* 精簡版面：標題降低、取消小字說明。 */
+.cycle-heading h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.backup-card h5,
+.settings-card h5,
+.history-card h5 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.cycle-legend,
+.stat-label,
+.record-context,
+.cycle-status,
+#backupFilePicker .slowly-file-label,
+.settings-fields label,
+.period-cell span,
+.selected-event-main span,
+.count-pill {
+  font-size: 1rem !important;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.record-context {
+  margin: 0 0 12px;
+  color: var(--cycle-text);
+}

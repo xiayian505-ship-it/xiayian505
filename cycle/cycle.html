@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f7f2f1">
+  <title>給自己的溫柔紀錄</title>
+
+  <!-- Framework：只負責頁面骨架 -->
+  <link rel="stylesheet" href="https://framework.stillnessbyslowly.com/line/outline/outline.css">
+
+  <!-- 軍火庫：通用 UI / 元件樣式 -->
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/responsive.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/component/calendar/calendar_component.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/calendar/calendar_interaction.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/component/data/data_crud_component.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/custom_file.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/custom_date.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/custom_select.css">
+  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/confirm/confirm.css">
+
+  <!-- cycle 自己 -->
+  <link rel="stylesheet" href="./cycle.css">
+  <link rel="stylesheet" href="./cycle_style.css">
+</head>
+<body>
+  <main class="outline-page cycle-page">
+    <header class="page-heading cycle-heading">
+      <h3>給自己的溫柔紀錄</h3>
+    </header>
+
+    <div class="outline-tabs-shell" id="outlineTabs" data-slowly-tabs>
+      <nav class="view-tabs" role="tablist" aria-label="Cycle 分頁">
+        <button type="button" role="tab" data-view-target="calendar" aria-selected="true">月曆</button>
+        <button type="button" role="tab" data-view-target="records" aria-selected="false">紀錄</button>
+        <button type="button" role="tab" data-view-target="stats" aria-selected="false">週期</button>
+      </nav>
+
+      <section class="view-panel" data-view-panel="calendar">
+        <div class="cycle-section-heading">
+          <div class="cycle-legend" aria-label="月曆標記說明">
+            <span><i class="legend-dot legend-record"></i>實際紀錄</span>
+            <span><i class="legend-dot legend-predicted"></i>推估日期</span>
+          </div>
+        </div>
+
+        <div id="cycleCalendar" class="cycle-calendar-host"></div>
+
+        <section class="selected-day-card" aria-live="polite">
+          <div class="selected-day-head">
+            <strong id="selectedDateLabel">—</strong>
+            <button id="addSelectedDateRecord" class="cycle-button cycle-button-primary" type="button">
+              新增這天紀錄
+            </button>
+          </div>
+          <div id="selectedDateEvents" class="selected-day-events">
+            <p class="cycle-muted">請先點選月曆日期。</p>
+          </div>
+        </section>
+      </section>
+
+      <section class="view-panel" data-view-panel="records" hidden>
+        <p id="recordContextText" class="record-context" hidden></p>
+        <div id="recordCrud"></div>
+
+        <section class="backup-card">
+          <h5>備份</h5>
+
+          <div class="backup-actions">
+            <button id="exportBackup" class="cycle-button" type="button">匯出 JSON</button>
+
+            <div class="slowly-file" id="backupFilePicker" data-default-label="尚未選擇備份檔">
+              <input class="slowly-file-native" id="backupFile" type="file" accept=".json,application/json">
+              <button class="slowly-file-trigger cycle-button" type="button">選擇備份檔</button>
+              <span class="slowly-file-label">尚未選擇備份檔</span>
+            </div>
+
+            <button id="importBackup" class="cycle-button" type="button" disabled>還原備份</button>
+          </div>
+
+          <p id="backupStatus" class="cycle-status" role="status" aria-live="polite"></p>
+        </section>
+      </section>
+
+      <section class="view-panel" data-view-panel="stats" hidden>
+        <div class="stats-grid">
+          <article class="stat-card">
+            <span class="stat-label">平均週期</span>
+            <strong id="averageCycle">—</strong>
+          </article>
+
+          <article class="stat-card">
+            <span class="stat-label">平均經期</span>
+            <strong id="averagePeriod">—</strong>
+          </article>
+
+          <article class="stat-card stat-card-wide">
+            <span class="stat-label">下次推估</span>
+            <strong id="nextPrediction">—</strong>
+          </article>
+        </div>
+
+        <section class="settings-card">
+          <h5>推估設定</h5>
+
+          <div class="settings-fields">
+            <label>
+              <span>週期</span>
+              <span class="number-field"><input id="cycleLength" type="number" min="1" max="365" inputmode="numeric"><b>天</b></span>
+            </label>
+            <label>
+              <span>經期</span>
+              <span class="number-field"><input id="periodLength" type="number" min="1" max="60" inputmode="numeric"><b>天</b></span>
+            </label>
+          </div>
+
+          <div class="settings-actions">
+            <button id="saveSettings" class="cycle-button cycle-button-primary" type="button">儲存設定</button>
+            <button id="applyAverage" class="cycle-button" type="button" disabled>套用目前平均</button>
+          </div>
+          <p id="settingsStatus" class="cycle-status" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="history-card">
+          <div class="history-head">
+            <h5>歷次經期</h5>
+            <span id="periodRecordCount" class="count-pill">0 次</span>
+          </div>
+          <div id="periodHistory" class="period-history"></div>
+        </section>
+      </section>
+    </div>
+
+    <footer class="sbs-signature" aria-label="Stillness by Slowly">
+      <span class="sbs-signature-mark">慢 慢</span>
+      <span class="sbs-signature-separator" aria-hidden="true">|</span>
+      <span class="sbs-signature-name">Stillness by Slowly</span>
+    </footer>
+  </main>
+
+  <!-- Calendar 基礎與完整元件 -->
+  <script src="https://lib.stillnessbyslowly.com/calendar/lunar_data.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/lunar.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/lunar_festivals_data.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/lunar_festivals.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/solar_festivals_data.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/solar_festivals.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/solar_terms_data.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/solar_terms.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/calendar.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/component/calendar/calendar_component.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/calendar/calendar_interaction.js"></script>
+
+  <!-- Data CRUD / storage / change -->
+  <script src="https://lib.stillnessbyslowly.com/date/timestamp.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/fiction/Fiction_storage.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/fiction/Fiction_change.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/component/data/data_crud_component.js"></script>
+
+  <!-- Backup -->
+  <script src="https://lib.stillnessbyslowly.com/data/Data_backup.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/data/json/json_safe_import.js"></script>
+
+  <!-- UI -->
+  <script src="https://lib.stillnessbyslowly.com/ui/custom_file.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/ui/custom_date.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/ui/custom_select.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/ui/confirm/confirm.js"></script>
+  <script src="https://lib.stillnessbyslowly.com/ui/tabs/tabs.js"></script>
+
+  <!-- Framework：Outline initializer 依賴 SlowlyTabs -->
+  <script src="https://framework.stillnessbyslowly.com/line/outline/outline.js"></script>
+
+  <!-- cycle 自己 -->
+  <script src="./cycle.js"></script>
+  <script src="./cycle_style.js"></script>
+</body>
+</html>

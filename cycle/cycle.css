@@ -1,0 +1,422 @@
+:root {
+  --cycle-bg: #fbf8f7;
+  --cycle-surface: #ffffff;
+  --cycle-soft: #f7efee;
+  --cycle-soft-2: #f3f0ee;
+  --cycle-text: #3c3433;
+  --cycle-muted: #807472;
+  --cycle-line: #e6dcda;
+  --cycle-accent: #a86f72;
+  --cycle-accent-deep: #805255;
+  --cycle-accent-soft: #ead7d7;
+  --cycle-predicted: #a69aaf;
+  --cycle-danger: #a34f55;
+}
+
+body {
+  margin: 0;
+  background: var(--cycle-bg);
+  color: var(--cycle-text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  line-height: 1.65;
+}
+
+button,
+input,
+textarea,
+select {
+  color: inherit;
+}
+
+.cycle-page {
+  --outline-max-width: 980px;
+  --outline-line: var(--cycle-line);
+  --outline-title-top: 28px;
+  --outline-title-bottom: 20px;
+  --outline-tabs-top: 20px;
+  --outline-content-top: 24px;
+  --outline-content-bottom: 42px;
+  --outline-logo-top: 22px;
+  --outline-logo-bottom: 14px;
+}
+
+
+.home-link {
+  text-decoration: none;
+  color: var(--cycle-muted);
+}
+
+.view-tabs [data-view-target] {
+  color: var(--cycle-muted);
+  transition: color 160ms ease, border-color 160ms ease;
+  border-bottom: 2px solid transparent;
+}
+
+.view-tabs [data-view-target][aria-selected="true"] {
+  color: var(--cycle-accent-deep);
+  border-bottom-color: var(--cycle-accent);
+}
+
+.cycle-section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-end;
+  margin-bottom: 18px;
+}
+
+.cycle-section-heading p,
+.backup-card p,
+.settings-card p {
+  margin: 5px 0 0;
+  color: var(--cycle-muted);
+}
+
+.cycle-calendar-host,
+.selected-day-card,
+.backup-card,
+.settings-card,
+.history-card,
+.stat-card {
+  border: 1px solid var(--cycle-line);
+  background: var(--cycle-surface);
+}
+
+.cycle-calendar-host {
+  padding: clamp(10px, 2.5vw, 20px);
+}
+
+#cycleCalendar .slowly-calendar {
+  --sc-bg: var(--cycle-surface);
+  --sc-text: var(--cycle-text);
+  --sc-muted: var(--cycle-muted);
+  --sc-soft: var(--cycle-soft-2);
+  --sc-weekend: var(--cycle-accent);
+  --sc-lunar: var(--cycle-muted);
+  --sc-festival: var(--cycle-accent-deep);
+  --sc-solar-term: #7d7785;
+  --sc-grid-line: var(--cycle-line);
+  --sc-selected-bg: var(--cycle-soft);
+  --sc-selected-text: var(--cycle-text);
+  --sc-selected-border: var(--cycle-accent);
+  --sc-today-ring: var(--cycle-accent);
+}
+
+.cycle-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--cycle-muted);
+}
+
+.cycle-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 3px;
+  border-radius: 0;
+  display: inline-block;
+}
+
+.legend-record {
+  background: var(--cycle-accent);
+}
+
+.legend-predicted {
+  border: 2px solid var(--cycle-predicted);
+  background: transparent;
+}
+
+#cycleCalendar .sc-day {
+  position: relative;
+}
+
+#cycleCalendar .sc-day.has-marker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 12px;
+  height: 2px;
+  border-radius: 0;
+  background: var(--cycle-accent);
+  transform: translateX(-50%);
+}
+
+#cycleCalendar .sc-day.is-cycle-predicted {
+  outline: 1px dashed var(--cycle-predicted);
+  outline-offset: -3px;
+}
+
+#cycleCalendar .sc-day.is-cycle-predicted:not(.has-marker)::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 12px;
+  height: 3px;
+  border: 1px solid var(--cycle-predicted);
+  border-radius: 0;
+  transform: translateX(-50%);
+}
+
+.selected-day-card,
+.backup-card,
+.settings-card,
+.history-card {
+  margin-top: 18px;
+  padding: clamp(16px, 3vw, 22px);
+}
+
+.selected-day-head,
+.history-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+}
+
+#selectedDateLabel {
+  display: block;
+  font-size: 1.2rem;
+}
+
+.selected-day-events {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.selected-event {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border-radius: 0;
+  background: var(--cycle-soft-2);
+}
+
+.selected-event-main {
+  min-width: 0;
+}
+
+.selected-event-main strong,
+.selected-event-main span {
+  display: block;
+}
+
+.selected-event-main span {
+  margin-top: 2px;
+  color: var(--cycle-muted);
+  overflow-wrap: anywhere;
+}
+
+.cycle-button {
+  appearance: none;
+  border: 1px solid var(--cycle-line);
+  border-radius: 0;
+  background: var(--cycle-surface);
+  padding: 9px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cycle-button:hover:not(:disabled) {
+  border-color: var(--cycle-accent);
+}
+
+.cycle-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cycle-button-primary {
+  border-color: var(--cycle-accent);
+  background: var(--cycle-accent);
+  color: #fff;
+}
+
+.cycle-muted,
+.cycle-status {
+  color: var(--cycle-muted);
+}
+
+#recordCrud .slowly-data-crud {
+  --sdc-text: var(--cycle-text);
+  --sdc-muted: var(--cycle-muted);
+  --sdc-line: var(--cycle-line);
+  --sdc-accent: var(--cycle-accent-deep);
+  --sdc-danger: var(--cycle-danger);
+  border: 1px solid var(--cycle-line);
+  background: var(--cycle-surface);
+  padding: clamp(14px, 2.8vw, 22px);
+}
+
+.backup-card {
+  display: grid;
+  gap: 16px;
+}
+
+.backup-actions,
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+#backupFilePicker {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#backupFilePicker .slowly-file-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#backupFilePicker .slowly-file-label {
+  color: var(--cycle-muted);
+}
+
+.cycle-status {
+  min-height: 1.5em;
+  margin: 0;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.stat-card {
+  padding: 18px;
+}
+
+.stat-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: clamp(1.55rem, 4vw, 2.15rem);
+  font-weight: 650;
+}
+
+.stat-card-wide {
+  grid-column: 1 / -1;
+}
+
+.settings-card {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 180px));
+  gap: 12px;
+}
+
+.settings-fields label {
+  display: grid;
+  gap: 6px;
+  color: var(--cycle-muted);
+}
+
+.number-field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.number-field input {
+  width: 100%;
+  border: 1px solid var(--cycle-line);
+  border-radius: 0;
+  background: #fff;
+  padding: 10px 12px;
+  color: var(--cycle-text);
+}
+
+.number-field b {
+  color: var(--cycle-text);
+  font-weight: 500;
+}
+
+.count-pill {
+  padding: 4px 9px;
+  border-radius: 0;
+  background: var(--cycle-soft);
+  color: var(--cycle-accent-deep);
+}
+
+.period-history {
+  margin-top: 16px;
+  display: grid;
+  gap: 9px;
+}
+
+.period-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.8fr);
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--cycle-line);
+}
+
+.period-row:first-child {
+  border-top: 0;
+}
+
+.period-cell span {
+  display: block;
+  color: var(--cycle-muted);
+}
+
+.period-cell strong {
+  display: block;
+  margin-top: 2px;
+  font-weight: 600;
+}
+
+.sbs-signature {
+  color: var(--cycle-muted);
+}
+
+@media (max-width: 680px) {
+  .cycle-section-heading,
+  .selected-day-head,
+  .history-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .stats-grid,
+  .settings-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .period-row {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .selected-event {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .selected-event .cycle-button,
+  #addSelectedDateRecord {
+    width: 100%;
+  }
+}
