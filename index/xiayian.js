@@ -672,9 +672,26 @@
       const content = document.createElement("div"); content.className = "post-content"; renderArticleContent(content, post.content);
       heading.append(title, toggle); details.append(meta, content); article.append(heading, details);
       toggle.addEventListener("click", function () {
-        const open = article.classList.toggle("is-open");
-        toggle.setAttribute("aria-expanded", String(open));
-        toggle.setAttribute("aria-label", `${open ? "收合" : "展開"}「${post.title}」內文`);
+        const willOpen = !article.classList.contains("is-open");
+        if (willOpen) {
+          elements.posts.querySelectorAll(".post-card.is-open").forEach(function (openArticle) {
+            if (openArticle === article) return;
+            openArticle.classList.remove("is-open");
+            const openToggle = openArticle.querySelector(".post-toggle");
+            if (!openToggle) return;
+            openToggle.setAttribute("aria-expanded", "false");
+            const openTitle = openArticle.querySelector("h3")?.textContent || "文章";
+            openToggle.setAttribute("aria-label", `展開「${openTitle}」內文`);
+          });
+        }
+        article.classList.toggle("is-open", willOpen);
+        toggle.setAttribute("aria-expanded", String(willOpen));
+        toggle.setAttribute("aria-label", `${willOpen ? "收合" : "展開"}「${post.title}」內文`);
+        if (willOpen) {
+          requestAnimationFrame(function () {
+            article.scrollIntoView({ behavior:"smooth", block:"start" });
+          });
+        }
       });
       if (isAdmin()) {
         const actions = document.createElement("div"); actions.className = "post-actions";

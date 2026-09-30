@@ -18,8 +18,9 @@
   <link rel="stylesheet" href="index/xiayian.css">
   <link rel="stylesheet" href="index/xiayian_style.css">
 </head>
-<body>
+<body id="top">
   <header class="site-header">
+    <h1 id="page-title" class="site-title"><a href="#top" aria-label="回到頁面最上方">熠熠生輝，歲歲平安</a></h1>
     <nav class="header-actions" aria-label="網站功能">
       <span id="admin-badge" class="admin-badge" data-auth-visible="authenticated" hidden>ADMIN</span>
       <button id="new-post-button" class="button button-primary" type="button" data-auth-visible="authenticated" hidden>寫字</button>
@@ -28,11 +29,6 @@
   </header>
 
   <main>
-    <section class="intro" aria-labelledby="page-title">
-      <h1 id="page-title">熠熠生輝，歲歲平安</h1>
-      <p class="intro-copy">寫自己想寫的字，說自己想說的話</p>
-    </section>
-
     <section class="calendar-section" aria-label="日曆">
       <div id="home-calendar"></div>
     </section>
@@ -42,21 +38,25 @@
         <h2 id="posts-title">READ</h2>
         <p id="post-count" class="post-count" aria-live="polite"></p>
       </div>
-      <section id="category-section" class="category-section" aria-label="文章分類">
-        <div class="category-heading">
-          <span>分類</span>
-          <button id="new-category-button" class="button button-quiet" type="button" data-auth-visible="authenticated" hidden>＋ 新增分類</button>
+      <div class="posts-layout">
+        <section id="category-section" class="category-section" aria-label="文章分類">
+          <div class="category-heading">
+            <span>分類</span>
+            <button id="new-category-button" class="button button-quiet" type="button" data-auth-visible="authenticated" hidden>＋ 新增分類</button>
+          </div>
+          <p id="category-status" class="category-status" role="status">正在讀取分類…</p>
+          <div id="category-tree" class="category-tree" aria-label="分類樹"></div>
+        </section>
+        <div class="posts-column">
+          <div id="status" class="status" role="status">正在讀取文章…</div>
+          <div id="posts" class="posts" aria-live="polite"></div>
+          <nav id="post-pages" class="post-pages" aria-label="文章分頁" hidden>
+            <button id="post-prev" class="button button-quiet" type="button">上一頁</button>
+            <span id="post-page-label" class="post-page-label" aria-live="polite"></span>
+            <button id="post-next" class="button button-quiet" type="button">下一頁</button>
+          </nav>
         </div>
-        <p id="category-status" class="category-status" role="status">正在讀取分類…</p>
-        <div id="category-tree" class="category-tree" aria-label="分類樹"></div>
-      </section>
-      <div id="status" class="status" role="status">正在讀取文章…</div>
-      <div id="posts" class="posts" aria-live="polite"></div>
-      <nav id="post-pages" class="post-pages" aria-label="文章分頁" hidden>
-        <button id="post-prev" class="button button-quiet" type="button">上一頁</button>
-        <span id="post-page-label" class="post-page-label" aria-live="polite"></span>
-        <button id="post-next" class="button button-quiet" type="button">下一頁</button>
-      </nav>
+      </div>
     </section>
   </main>
 
