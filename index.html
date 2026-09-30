@@ -12,7 +12,6 @@
   <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/responsive.css">
   <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/confirm/confirm.css">
   <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/Auth_permission_ui.css">
-  <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/component/calendar/calendar_component.css">
   <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/toast.css">
   <link rel="stylesheet" href="https://lib.stillnessbyslowly.com/ui/custom_select.css">
   <link rel="stylesheet" href="index/xiayian.css">
@@ -29,33 +28,28 @@
   </header>
 
   <main>
-    <section class="calendar-section" aria-label="日曆">
-      <div id="home-calendar"></div>
-    </section>
-
     <section id="writing" class="posts-section" aria-labelledby="posts-title">
+      <section id="category-section" class="category-section" aria-label="文章分類">
+        <div class="category-heading">
+          <span>分類</span>
+          <button id="new-category-button" class="button button-quiet" type="button" data-auth-visible="authenticated" hidden>＋ 新增分類</button>
+        </div>
+        <p id="category-status" class="category-status" role="status">正在讀取分類…</p>
+        <div id="category-tree" class="category-tree" aria-label="分類樹"></div>
+      </section>
+
       <div class="section-heading">
         <h2 id="posts-title">READ</h2>
         <p id="post-count" class="post-count" aria-live="polite"></p>
       </div>
-      <div class="posts-layout">
-        <section id="category-section" class="category-section" aria-label="文章分類">
-          <div class="category-heading">
-            <span>分類</span>
-            <button id="new-category-button" class="button button-quiet" type="button" data-auth-visible="authenticated" hidden>＋ 新增分類</button>
-          </div>
-          <p id="category-status" class="category-status" role="status">正在讀取分類…</p>
-          <div id="category-tree" class="category-tree" aria-label="分類樹"></div>
-        </section>
-        <div class="posts-column">
-          <div id="status" class="status" role="status">正在讀取文章…</div>
-          <div id="posts" class="posts" aria-live="polite"></div>
-          <nav id="post-pages" class="post-pages" aria-label="文章分頁" hidden>
-            <button id="post-prev" class="button button-quiet" type="button">上一頁</button>
-            <span id="post-page-label" class="post-page-label" aria-live="polite"></span>
-            <button id="post-next" class="button button-quiet" type="button">下一頁</button>
-          </nav>
-        </div>
+      <div class="posts-column">
+        <div id="status" class="status" role="status">正在讀取文章…</div>
+        <div id="posts" class="posts" aria-live="polite"></div>
+        <nav id="post-pages" class="post-pages" aria-label="文章分頁" hidden>
+          <button id="post-prev" class="button button-quiet" type="button">上一頁</button>
+          <span id="post-page-label" class="post-page-label" aria-live="polite"></span>
+          <button id="post-next" class="button button-quiet" type="button">下一頁</button>
+        </nav>
       </div>
     </section>
   </main>
@@ -172,17 +166,6 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <!-- 慢慢萬年曆：依照元件使用說明載入曆法資料與核心。 -->
-  <script src="https://lib.stillnessbyslowly.com/calendar/lunar_data.js"></script>
-  <script src="https://lib.stillnessbyslowly.com/calendar/lunar.js"></script>
-  <script src="https://lib.stillnessbyslowly.com/calendar/lunar_festivals_data.js"></script>
-  <script src="https://lib.stillnessbyslowly.com/calendar/lunar_festivals.js"></script>
-  <script src="https://lib.stillnessbyslowly.com/calendar/solar_festivals_data.js"></script>
-  <script src="https://lib.stillnessbyslowly.com/calendar/solar_festivals.js"></script>
-  <script src="https://lib.stillnessbyslowly.com/calendar/solar_terms_data.js"></script>
-  <script src="https://lib.stillnessbyslowly.com/calendar/solar_terms.js"></script>
-  <script src="https://lib.stillnessbyslowly.com/calendar/calendar.js"></script>
-  <script src="https://lib.stillnessbyslowly.com/component/calendar/calendar_component.js"></script>
   <script src="https://lib.stillnessbyslowly.com/ui/confirm/confirm.js"></script>
   <script src="https://lib.stillnessbyslowly.com/ui/Auth_permission_ui.js"></script>
   <script src="https://lib.stillnessbyslowly.com/fiction/Fiction_paginate.js"></script>

@@ -3,11 +3,10 @@
   .header-actions { gap:6px; }
   .admin-badge { display:none; }
   .button { padding:7px 10px; font-size:.78rem; }
-  main { padding:0 18px; }
+  main { padding:64px 18px 0; }
   .intro { padding:76px 0 28px; }
   .intro h1 { font-size:clamp(2.75rem,14vw,4.4rem); }
   .intro-copy { margin-top:22px; font-size:.92rem; }
-  .calendar-reserve { min-height:145px; }
   .posts-section { padding-bottom:76px; }
   .section-heading { min-height:66px; }
   .post-card { padding:23px 0 25px; }
@@ -69,52 +68,6 @@
 }
 
 
-/* UI v5 — 萬年曆引用軍火庫元件；本站只決定視覺與排版。 */
-.calendar-section { padding:26px 0 34px; }
-#home-calendar .slowly-calendar {
-  --sc-bg:var(--paper);
-  --sc-text:var(--ink);
-  --sc-muted:var(--muted);
-  --sc-soft:#eeece5;
-  --sc-weekend:var(--danger);
-  --sc-lunar:var(--muted);
-  --sc-festival:var(--danger);
-  --sc-solar-term:var(--ink);
-  --sc-grid-line:var(--line);
-  --sc-selected-bg:var(--accent-soft);
-  --sc-selected-text:var(--ink);
-  --sc-selected-border:var(--ink);
-  --sc-today-ring:var(--ink);
-  font-family:inherit;
-  background:transparent;
-}
-#home-calendar .sc-toolbar { margin-bottom:24px; }
-#home-calendar .sc-nav,
-#home-calendar .sc-today,
-#home-calendar .sc-title,
-#home-calendar .sc-picker-go,
-#home-calendar .sc-picker input,
-#home-calendar .sc-picker select,
-#home-calendar .sc-weekday,
-#home-calendar .sc-day { border-radius:0; }
-#home-calendar .sc-hero { padding-bottom:20px; border-bottom:1px solid var(--line); }
-#home-calendar .sc-hero-year { font-weight:500; }
-#home-calendar .sc-hero-day { font-weight:600; }
-#home-calendar .sc-weekday { background:transparent; border-bottom:1px solid var(--line); }
-#home-calendar .sc-day.is-today { box-shadow:inset 0 0 0 2px var(--sc-today-ring); }
-#home-calendar .sc-day:focus-visible { outline:3px solid var(--accent); outline-offset:1px; }
-#home-calendar .sc-nav:focus-visible,
-#home-calendar .sc-title:focus-visible,
-#home-calendar .sc-today:focus-visible { outline:3px solid var(--accent); outline-offset:1px; }
-
-@media (max-width:640px) {
-  .calendar-section { padding:18px 0 28px; }
-  #home-calendar .sc-toolbar { margin-bottom:18px; }
-  .post-pages { justify-content:space-between; gap:8px; }
-  .site-toast { left:18px; right:18px; bottom:18px; max-width:none; }
-}
-
-
 /* UI v6 — 分類樹沿用原站的直角、線條和強調色。 */
 .category-heading > span { letter-spacing:.12em; }
 .category-link { font-size:.84rem; }
@@ -143,59 +96,68 @@
 }
 
 
-/* UI v7 — header 標題、閱讀區雙欄與分類 sticky。 */
-.intro-title-space {
-  height:1.2em;
-  font-size:clamp(1.8rem,4.6vw,3.4rem);
-  line-height:1.2;
-}
-.posts-layout {
-  display:grid;
-  grid-template-columns:minmax(210px,250px) minmax(0,1fr);
-  gap:36px;
-  align-items:start;
-}
+/* UI v10 — 固定 header + 上方 sticky 分類樹。保留原本父子樹結構。 */
 .posts-column { min-width:0; }
+
 .category-section {
   position:sticky;
-  top:18px;
-  align-self:start;
-  max-height:calc(100vh - 36px);
+  top:72px;
+  z-index:900;
+  max-height:min(42dvh,360px);
   overflow-y:auto;
-  border-bottom:0;
-  border-right:1px solid var(--line);
-  padding:24px 28px 24px 0;
+  overflow-x:hidden;
+  padding:14px 0 16px;
+  border-right:0;
+  border-bottom:1px solid var(--ink);
+  background:var(--paper);
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
 }
+
+.category-heading {
+  position:sticky;
+  top:0;
+  z-index:2;
+  margin-bottom:10px;
+  padding:2px 0 6px;
+  background:var(--paper);
+}
+
+.category-tree {
+  overflow-x:auto;
+  overflow-y:visible;
+  padding-right:4px;
+}
+
+/* 分類仍然是原本的樹：箭頭、縮排、子分類全部保留。 */
+.category-list { min-width:0; }
+.category-row { min-width:0; }
+
+/* fixed header + sticky 分類高度會變動，JS 會依實際高度計算文章定位。 */
+.post-card,
+#posts { scroll-margin-top:12px; }
 
 @media (max-width:640px) {
   .site-header { gap:12px; }
   .site-title { font-size:.82rem; }
   .site-title a { display:block; white-space:nowrap; }
-  .posts-layout {
-    grid-template-columns:minmax(88px,28vw) minmax(0,1fr);
-    gap:14px;
-  }
-  .category-section {
-    position:sticky;
-    top:12px;
-    max-height:calc(100dvh - 24px);
-    overflow-y:auto;
-    overflow-x:hidden;
-    border-right:1px solid var(--line);
-    border-bottom:0;
-    padding:14px 10px 18px 0;
-  }
-  .category-heading {
-    align-items:flex-start;
-    flex-direction:column;
-  }
-  .category-tree { overflow-x:hidden; }
-  .category-row { gap:2px; }
-  .category-expander { flex-basis:20px; min-width:20px; width:20px; }
-  .category-link { padding:5px 3px; overflow-wrap:anywhere; }
-  .category-count { font-size:.66rem; }
-  .category-list .category-list { margin-left:7px; padding-left:5px; }
-}
 
-/* UI v8 — 切換文章時從新文章起點開始閱讀。 */
-.post-card { scroll-margin-top:12px; }
+  .category-section {
+    top:64px;
+    max-height:min(40dvh,300px);
+    padding:11px 0 13px;
+  }
+
+  .category-heading {
+    align-items:center;
+    flex-direction:row;
+    margin-bottom:8px;
+  }
+
+  .category-tree { overflow-x:auto; }
+  .category-row { gap:4px; }
+  .category-expander { flex-basis:24px; min-width:24px; width:24px; }
+  .category-link { padding:5px 6px; overflow-wrap:anywhere; }
+  .category-count { font-size:.68rem; }
+  .category-list .category-list { margin-left:12px; padding-left:8px; }
+}

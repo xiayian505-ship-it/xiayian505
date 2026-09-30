@@ -537,7 +537,20 @@
     if (key.startsWith("cat:")) tree.expand(key);
     currentPage = 1;
     render();
+    requestAnimationFrame(function () {
+      scrollBelowSticky(elements.posts);
+    });
   }
+  function scrollBelowSticky(element) {
+    if (!element) return;
+    const header = document.querySelector(".site-header");
+    const category = elements["category-section"];
+    const headerHeight = header ? header.getBoundingClientRect().height : 0;
+    const categoryHeight = category ? category.getBoundingClientRect().height : 0;
+    const top = window.scrollY + element.getBoundingClientRect().top - headerHeight - categoryHeight - 12;
+    window.scrollTo({ top: Math.max(0, top), behavior:"smooth" });
+  }
+
   function createEl(tag,className,text) {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -689,7 +702,7 @@
         toggle.setAttribute("aria-label", `${willOpen ? "收合" : "展開"}「${post.title}」內文`);
         if (willOpen) {
           requestAnimationFrame(function () {
-            article.scrollIntoView({ behavior:"smooth", block:"start" });
+            scrollBelowSticky(article);
           });
         }
       });
@@ -887,11 +900,11 @@
   elements["post-prev"].addEventListener("click", function () {
     if (currentPage <= 1) return;
     currentPage -= 1; render();
-    elements.posts.scrollIntoView({ behavior:"smooth", block:"start" });
+    scrollBelowSticky(elements.posts);
   });
   elements["post-next"].addEventListener("click", function () {
     currentPage += 1; render();
-    elements.posts.scrollIntoView({ behavior:"smooth", block:"start" });
+    scrollBelowSticky(elements.posts);
   });
 
   elements["editor-form"].addEventListener("submit", async function (event) {
