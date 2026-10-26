@@ -1,4 +1,4 @@
-/* SBS IMG Gateway | Cloudflare Pages advanced mode | 2026-10-26 auth patch v3.
+/* SBS IMG Gateway | Cloudflare Pages advanced mode | 2026-10-26 short URLs v5.
  * Reconstructed from the frontend API and existing R2 object layout.
  * Original backend source is unavailable. This is not a copy of the original.
  * Deploy only after checking the diagnostic endpoint on a preview deployment.
@@ -19,6 +19,10 @@ const MIME_BY_EXTENSION = {
   hif:'image/heif', jxl:'image/jxl', jp2:'image/jp2', dng:'image/x-adobe-dng'
 };
 const NAME_INDEX_KEY = '_sbs_img/image_names_v1.json';
+// A separate R2 pointer is kept for each short URL, never a second image copy.
+const SHORT_LINK_PREFIX = '_sbs_img/short_links_v1/';
+const SHORT_PUBLIC_PATH = 'i/';
+const SHORT_URL_PATTERN = /^[a-z0-9]+-\d{14}\.[a-z0-9]+$/;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_THUMB_BYTES = 1024 * 1024;
 const CORS = { 'Access-Control-Allow-Origin':'*',
@@ -35,14 +39,97 @@ function isOriginal(key) { return /^images\/\d{4}\/\d{2}\/[^/]+$/.test(key) && !
 function thumbnailKey(key) { return `thumbs/${key}.webp`; }
 const PUBLIC_IMAGE_BASE = 'https://img.stillnessbyslowly.com/';
 function imageUrl(_request,key) { return PUBLIC_IMAGE_BASE + key.split('/').map(encodeURIComponent).join('/'); }
-function imageRecord(request,item,displayName=null) {
+
+/*
+ * Short IDs use an ASCII-only fragment of the original UUID and the actual R2
+ * upload timestamp (UTC). Their spelling stays stable across rename and refresh.
+ * Longer UUID fragments are used only if another image already owns the ID.
+ */
+function shortSlug(object, uuidLength = 12) {
+  const name = object.key.split('/').at(-1);
+  const uuid = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})_/i.exec(name)?.[1];
+  if (!uuid) return null;
+  const ext = extension(name);
+  if (!EXTENSIONS.has(ext)) return null;
+  const uploaded = object.uploaded instanceof Date
+    ? object.uploaded
+    : new Date(object.uploaded || object.createdAt || '');
+  if (!Number.isFinite(uploaded.getTime())) return null;
+  const when = [uploaded.getUTCFullYear(),
+    String(uploaded.getUTCMonth() + 1).padStart(2, '0'),
+    String(uploaded.getUTCDate()).padStart(2, '0'),
+    String(uploaded.getUTCHours()).padStart(2, '0'),
+    String(uploaded.getUTCMinutes()).padStart(2, '0'),
+    String(uploaded.getUTCSeconds()).padStart(2, '0')].join('');
+  const hex = uuid.replaceAll('-', '').slice(0, uuidLength);
+  const randomCode = BigInt('0x' + hex).toString(36);
+  return `${randomCode}-${when}.${ext}`;
+}
+function pointerKey(slug) { return SHORT_LINK_PREFIX + slug + '.json'; }
+function shortPublicUrl(slug) { return PUBLIC_IMAGE_BASE + SHORT_PUBLIC_PATH + slug; }
+
+// Used by management list (backfill existing items) and by new uploads.
+// If a pointer is unavailable, the original URL remains fully functional.
+async function ensureShortUrl(bucket, object) {
+  if (!isOriginal(object.key)) return null;
+  for (const uuidLength of [12, 16, 20, 24, 28, 32]) {
+    const slug = shortSlug(object, uuidLength);
+    if (!slug) return null;
+    const key = pointerKey(slug);
+    const existing = await bucket.get(key);
+    if (existing) {
+      const mapping = await existing.json().catch(() => null);
+      if (mapping?.key === object.key) return shortPublicUrl(slug);
+      continue;
+    }
+    const payload = JSON.stringify({ version: 1, key: object.key });
+    // A unique R2 pointer; it contains no image content or credentials.
+    const created = await bucket.put(key, payload, {
+      onlyIf: { etagDoesNotMatch: '*' },
+      httpMetadata: { contentType: 'application/json', cacheControl: 'no-store' }
+    });
+    if (created) return shortPublicUrl(slug);
+    // A concurrent request created this ID. Recheck ownership, then retry.
+    const winner = await bucket.get(key);
+    const winnerData = winner ? await winner.json().catch(() => null) : null;
+    if (winnerData?.key === object.key) return shortPublicUrl(slug);
+  }
+  console.warn('SBS IMG: could not assign a unique short URL');
+  return null;
+}
+
+async function safeShortUrl(bucket, object) {
+  try { return await ensureShortUrl(bucket, object); }
+  catch (error) {
+    console.warn('SBS IMG short URL unavailable:', error?.name || 'unknown');
+    return null;
+  }
+}
+
+async function shortUrlForExisting(bucket, key) {
+  // For deleting old images, do not create a new pointer just to remove it.
+  const object = await bucket.head(key);
+  if (!object) return [];
+  const owned = [];
+  for (const uuidLength of [12, 16, 20, 24, 28, 32]) {
+    const slug = shortSlug(object, uuidLength);
+    if (!slug) break;
+    const pointer = pointerKey(slug);
+    const existing = await bucket.get(pointer);
+    if (!existing) continue;
+    const data = await existing.json().catch(() => null);
+    if (data?.key === key) owned.push(pointer);
+  }
+  return owned;
+}
+function imageRecord(request,item,displayName=null,shortUrl=null) {
   const key=item.key;
   const orig=item.customMetadata?.originalName || key.split('/').at(-1).replace(/^[0-9a-f-]{36}_/i,'');
   const title=displayName === null ? (item.customMetadata?.displayName ?? null) : displayName;
   return {id:key,key,name:title||orig,originalName:orig,displayName:title||null,
     type:item.httpMetadata?.contentType||'application/octet-stream',size:item.size,
     createdAt:item.uploaded?.toISOString?.() || new Date().toISOString(),
-    url:imageUrl(request,key),thumbnailUrl:null};
+    url:imageUrl(request,key),shortUrl,thumbnailUrl:null};
 }
 /*
  * Authenticate every private route on the server. Do not trust client-side UID checks.
@@ -146,11 +233,23 @@ async function imagesGet(request,bucket) {
   const objects=(await listAll(bucket)).filter(o=>isOriginal(o.key));
   const names=await readNames(bucket);
   const awaitedThumbKeys=new Set((await listAll(bucket,'thumbs/')).map(x=>x.key));
-  const images=objects.map(o=>{
-    const record=imageRecord(request,o,typeof names[o.key]==='string'?names[o.key]:null);
-    if (awaitedThumbKeys.has(thumbnailKey(o.key))) record.thumbnailUrl=imageUrl(request,thumbnailKey(o.key));
-    return record;
-  }).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  // Lazy one-time backfill: existing image objects are not moved or rewritten.
+  // Batch in small groups to avoid flooding R2 for larger galleries.
+  const images=[];
+  for (let offset = 0; offset < objects.length; offset += 8) {
+    const group = objects.slice(offset, offset + 8);
+    const links = await Promise.all(group.map(item => safeShortUrl(bucket, item)));
+    group.forEach((item, index) => {
+      const record = imageRecord(request, item,
+        typeof names[item.key] === 'string' ? names[item.key] : null,
+        links[index]);
+      if (awaitedThumbKeys.has(thumbnailKey(item.key))) {
+        record.thumbnailUrl = imageUrl(request, thumbnailKey(item.key));
+      }
+      images.push(record);
+    });
+  }
+  images.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   // Frontend accepts cursor, but not necessary for small private gallery datasets.
   return json({images,cursor:null});
 }
@@ -172,7 +271,9 @@ async function imagesPost(request,bucket) {
   // 副檔名優先決定已知格式；避免瀏覽器把 SVG 當成 text/plain 儲存。
   const contentType=MIME_BY_EXTENSION[extension(originalName)] || (mime && mime!=='application/octet-stream'?mime:'application/octet-stream');
   await bucket.put(key,bytes,{httpMetadata:{contentType,cacheControl:'public, max-age=3600'},customMetadata:{originalName,...(displayName?{displayName}:{})}});
-  return json({image:{key,url:imageUrl(request,key)}},201);
+  const stored = await bucket.head(key);
+  const shortUrl = stored ? await safeShortUrl(bucket, stored) : null;
+  return json({image:{key,url:imageUrl(request,key),shortUrl}},201);
 }
 async function imagesPatch(request,bucket,key) {
   if (!isOriginal(key)) return fail('圖片路徑不合法。');
@@ -188,13 +289,16 @@ async function imagesPatch(request,bucket,key) {
   names[key]=displayName;
   await bucket.put(NAME_INDEX_KEY,JSON.stringify({version:1,names}),
     {httpMetadata:{contentType:'application/json',cacheControl:'no-store'}});
-  return json({image:imageRecord(request,object,displayName)});
+  // R2 object not rewritten; previously created short pointer remains valid.
+  const shortUrl = await safeShortUrl(bucket, object);
+  return json({image:imageRecord(request,object,displayName,shortUrl)});
 }
 async function imagesDelete(bucket,key) {
   if (!isOriginal(key)) return fail('圖片路徑不合法。');
   const object=await bucket.head(key);
   if (!object) return fail('圖片不存在。',404);
-  await bucket.delete([key,thumbnailKey(key)]);
+  const shortPointers = await shortUrlForExisting(bucket, key);
+  await bucket.delete([key,thumbnailKey(key),...shortPointers]);
   const names=await readNames(bucket);
   if (Object.prototype.hasOwnProperty.call(names,key)) {
     delete names[key];
@@ -229,7 +333,7 @@ async function route(request,env){
   if (url.pathname === '/_sbs_gateway_health' && request.method === 'GET') {
     return json({
       status: bucket ? 'ok' : 'binding-missing',
-      build: 'sbs-img-auth-v4-20261026',
+      build: 'sbs-img-short-v5-20261026',
       r2Binding: Boolean(bucket),
       auth: 'requires-bearer'
     }, bucket ? 200 : 503);
@@ -250,7 +354,7 @@ async function route(request,env){
     const path=url.pathname.slice('/_manage'.length);
     // A protected, read-only check for confirming actual token verification.
     if (path === '/auth-check' && request.method === 'GET') {
-      return json({ authorized: true, build: 'sbs-img-auth-v4-20261026' });
+      return json({ authorized: true, build: 'sbs-img-short-v5-20261026' });
     }
     const key=url.searchParams.get('key')||'';
     try {
@@ -271,6 +375,15 @@ async function route(request,env){
   if((request.method==='GET'||request.method==='HEAD') && bucket){
     let key;
     try { key=decodeURIComponent(url.pathname.slice(1)); } catch { return fail('圖片網址編碼錯誤。',400); }
+    if (key.startsWith(SHORT_PUBLIC_PATH)) {
+      const slug = key.slice(SHORT_PUBLIC_PATH.length);
+      if (!SHORT_URL_PATTERN.test(slug)) return new Response('Not found', {status:404,headers:CORS});
+      const pointer = await bucket.get(pointerKey(slug));
+      if (!pointer) return new Response('Not found', {status:404,headers:CORS});
+      const mapping = await pointer.json().catch(() => null);
+      if (!mapping || !isOriginal(mapping.key)) return new Response('Not found', {status:404,headers:CORS});
+      key = mapping.key;
+    }
     if(key.startsWith('images/')||key.startsWith('thumbs/')){
       let object;
       try { object=await bucket.get(key); }

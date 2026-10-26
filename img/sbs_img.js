@@ -80,7 +80,8 @@
       displayName: typeof raw.displayName === 'string' && raw.displayName ? raw.displayName : null,
       type: String(raw.type || "").toLowerCase(), size: Number(raw.size) || 0,
       createdAt: raw.createdAt || "1970-01-01T00:00:00.000Z",
-      url: String(raw.url), thumbnailUrl: raw.thumbnailUrl || null,
+      url: String(raw.url), shortUrl: typeof raw.shortUrl === "string" ? raw.shortUrl : null,
+      thumbnailUrl: raw.thumbnailUrl || null,
       source: "R2", previewOnly: false
     };
   }
@@ -357,10 +358,10 @@
     async function uploadPending(onProgress) {
       if (!session) throw new Error("請先登入管理員。");
       if (uploading) throw new Error("已有圖片正在上傳。");
-      if (!pending.length) return { succeeded: 0, failed: [], thumbnailFailures: 0, urls: [] };
+      if (!pending.length) return { succeeded: 0, failed: [], thumbnailFailures: 0, urls: [], links: [] };
       uploading = true;
       emit("upload-started");
-      const results = { succeeded: 0, failed: [], thumbnailFailures: 0, urls: [] };
+      const results = { succeeded: 0, failed: [], thumbnailFailures: 0, urls: [], links: [] };
       const drafts = [...pending];
       try {
         for (const [index, draft] of drafts.entries()) {
@@ -373,6 +374,7 @@
             });
             results.succeeded++;
             results.urls.push(payload.image.url);
+            results.links.push({ url: payload.image.url, shortUrl: payload.image.shortUrl || null });
             if (draft.thumbBlob && draft.thumbBlob.size <= 1024 * 1024) {
               try {
                 await apiFetch(`/thumbnails?key=${encodeURIComponent(payload.image.key)}`, {
@@ -417,7 +419,8 @@
       activeRefresh = null;
       const updated = { ...original, name: String(response.image.name),
         originalName: String(response.image.originalName || original.originalName),
-        displayName: response.image.displayName || null };
+        displayName: response.image.displayName || null,
+        shortUrl: response.image.shortUrl || original.shortUrl };
       images = images.map(item => item.id === id ? updated : item);
       emit("renamed", { id });
       return { ...updated, favorite: favorites.has(id) };

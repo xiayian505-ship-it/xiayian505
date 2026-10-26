@@ -216,11 +216,15 @@
       return frame;
     }
 
-    async function copyUrl(item) {
-      if (!item?.url) return;
+    async function copyUrl(item, short = false) {
+      const url = short ? item?.shortUrl : item?.url;
+      if (!url) {
+        if (short) feedback("此圖片尚未建立短網址，請重新整理圖片庫。");
+        return;
+      }
       try {
-        await global.SlowlyClipboardCopy.copy(item.url);
-        notify("已複製圖片網址");
+        await global.SlowlyClipboardCopy.copy(url);
+        notify(short ? "已複製短網址" : "已複製圖片網址");
       } catch (error) { feedback(`複製失敗：${error.message}`); }
     }
 
@@ -276,10 +280,12 @@
       }
     }
 
-    function renderUploadedResults(urls) {
+    function renderUploadedResults(links) {
       const container = $("uploadedResult");
       container.replaceChildren();
-      for (const url of urls) {
+      for (const link of links) {
+        const url = typeof link === "string" ? link : link.url;
+        const shortUrl = typeof link === "string" ? null : link.shortUrl;
         const row = document.createElement("div");
         row.className = "uploaded-result-row";
         const img = document.createElement("img");
@@ -291,10 +297,13 @@
         });
         const copy = button("複製網址", "button button-primary button-small");
         copy.addEventListener("click", () => copyUrl({ url }));
-        row.append(img, copy);
+        const copyShort = button("複製短網址", "button button-accent button-small");
+        copyShort.disabled = !shortUrl;
+        copyShort.addEventListener("click", () => copyUrl({ shortUrl }, true));
+        row.append(img, copy, copyShort);
         container.appendChild(row);
       }
-      container.hidden = urls.length === 0;
+      container.hidden = links.length === 0;
     }
 
     function galleryOptions() {
@@ -334,11 +343,14 @@
         const copy = button("複製網址", "button button-accent button-small");
         copy.disabled = !item.url;
         copy.addEventListener("click", () => copyUrl(item));
+        const copyShort = button("複製短網址", "button button-accent button-small");
+        copyShort.disabled = !item.shortUrl;
+        copyShort.addEventListener("click", () => copyUrl(item, true));
         const remove = button("刪除", "button button-danger button-small");
         remove.disabled = deleteBusy || app.isUploading() || !app.isAdmin();
         remove.setAttribute("aria-label", `刪除圖片 ${item.name}`);
         remove.addEventListener("click", () => removeImages([item.id]));
-        actions.append(detail, copy, remove);
+        actions.append(detail, copy, copyShort, remove);
         body.appendChild(actions);
         card.append(visual, body);
         $("galleryGrid").appendChild(card);
@@ -415,7 +427,9 @@
       infoPair(info, "大小", app.formatSize(item.size));
       infoPair(info, "R2 檔名", item.originalName);
       infoPair(info, "圖片網址", item.url);
+      infoPair(info, "短網址", item.shortUrl || "尚未建立");
       $("detailCopy").disabled = !item.url;
+      $("detailShortCopy").disabled = !item.shortUrl;
       $("detailRemove").disabled = deleteBusy || app.isUploading() || !app.isAdmin();
       detailDialog.showModal();
     }
@@ -545,7 +559,7 @@
           uploadButton.textContent = `上傳中 ${done}/${total}`;
         });
         if (result.succeeded) {
-          renderUploadedResults(result.urls);
+          renderUploadedResults(result.links);
           global.SlowlyCustomFile.reset("#imagePicker");
           notify(`已上傳 ${result.succeeded} 張圖片`);
         }
@@ -610,6 +624,7 @@
       } finally { save.disabled = false; save.textContent = "儲存"; }
     });
     $("detailCopy").addEventListener("click", () => copyUrl(app.itemById(currentDetailId)));
+    $("detailShortCopy").addEventListener("click", () => copyUrl(app.itemById(currentDetailId), true));
     $("detailRemove").addEventListener("click", () => currentDetailId && removeImages([currentDetailId]));
     $("usageRefresh").addEventListener("click", () => loadUsage());
     tabs.root.addEventListener("slowlytabschange", event => {
