@@ -31,6 +31,7 @@
     let galleryPage = 1;
     let batchPage = 1;
     let currentDetailId = null;
+    let deleteBusy = false;
     const batchSelection = new Set();
     let favoriteInstances = [];
     let usageBusy = false;
@@ -202,7 +203,7 @@
         img.decoding = "async";
         img.addEventListener("error", () => {
           if (img.src !== item.url) { img.src = item.url; return; }
-          img.replaceWith(text("div", "無法顯示圖片", "image-load-error"));
+          img.replaceWith(text("div", `${item.type.toUpperCase()}｜無法在瀏覽器預覽`, "image-load-error"));
         });
         frame.appendChild(img);
       } else {
@@ -244,6 +245,9 @@
         img.src = draft.thumbUrl;
         img.alt = `待上傳圖片：${draft.name}`;
         img.className = "upload-item-image";
+        img.addEventListener("error", () => {
+          img.replaceWith(text("div", `${draft.name.split(".").pop().toUpperCase()}｜無預覽`, "image-load-error"));
+        });
         const info = document.createElement("div");
         info.className = "upload-item-text";
         info.appendChild(text("strong", draft.name));
@@ -282,6 +286,9 @@
         img.src = url;
         img.alt = "已上傳圖片";
         img.loading = "lazy";
+        img.addEventListener("error", () => {
+          img.replaceWith(text("div", "無法在瀏覽器預覽", "image-load-error"));
+        });
         const copy = button("複製網址", "button button-primary button-small");
         copy.addEventListener("click", () => copyUrl({ url }));
         row.append(img, copy);
@@ -327,7 +334,11 @@
         const copy = button("複製網址", "button button-accent button-small");
         copy.disabled = !item.url;
         copy.addEventListener("click", () => copyUrl(item));
-        actions.append(detail, copy);
+        const remove = button("刪除", "button button-danger button-small");
+        remove.disabled = deleteBusy || app.isUploading() || !app.isAdmin();
+        remove.setAttribute("aria-label", `刪除圖片 ${item.name}`);
+        remove.addEventListener("click", () => removeImages([item.id]));
+        actions.append(detail, copy, remove);
         body.appendChild(actions);
         card.append(visual, body);
         $("galleryGrid").appendChild(card);
@@ -358,7 +369,9 @@
         body.className = "image-card-body";
         body.append(text("strong", item.name, "image-card-title"));
         card.append(visual, body);
+        card.disabled = deleteBusy || app.isUploading() || !app.isAdmin();
         card.addEventListener("click", () => {
+          if (deleteBusy) return;
           if (batchSelection.has(item.id)) batchSelection.delete(item.id);
           else batchSelection.add(item.id);
           renderBatch();
@@ -367,8 +380,10 @@
       }
       const selected = batchSelection.size;
       $("batchCount").textContent = String(selected);
-      for (const id of ["batchClear", "batchFavorite", "batchUnfavorite", "batchRemove"]) $(id).disabled = !selected || app.isUploading() || !app.isAdmin();
-      $("batchSelectPage").disabled = result.data.length === 0 || app.isUploading() || !app.isAdmin();
+      for (const id of ["batchClear", "batchFavorite", "batchUnfavorite", "batchRemove"]) {
+        $(id).disabled = !selected || deleteBusy || app.isUploading() || !app.isAdmin();
+      }
+      $("batchSelectPage").disabled = result.data.length === 0 || deleteBusy || app.isUploading() || !app.isAdmin();
       $("batchPager").hidden = result.totalPages <= 1;
       $("batchPageLabel").textContent = `第 ${result.page} / ${result.totalPages} 頁`;
       $("batchPrev").disabled = !result.hasPrevious;
@@ -401,29 +416,63 @@
       infoPair(info, "R2 檔名", item.originalName);
       infoPair(info, "圖片網址", item.url);
       $("detailCopy").disabled = !item.url;
+      $("detailRemove").disabled = deleteBusy || app.isUploading() || !app.isAdmin();
       detailDialog.showModal();
     }
 
     async function removeImages(ids) {
+      if (deleteBusy) return;
       if (!app.isAdmin()) { feedback("請先登入管理員。"); return; }
       if (app.isUploading()) { feedback("圖片上傳中，請稍候。"); return; }
+
       const valid = [...new Set(ids)].filter(id => app.itemById(id));
       if (!valid.length) return;
-      const yes = await global.SlowlyConfirm.show({
-        title: `永久刪除 ${valid.length} 張圖片？`,
-        message: "刪除後無法復原，文章中正在使用的圖片也會失效。",
-        confirmText: "永久刪除", cancelText: "取消", className: "sbs-img-confirm"
-      });
-      if (!yes) return;
+
+      // 原生 dialog 位於瀏覽器頂層：先收起詳細資料，再開啟軍火庫確認框，
+      // 才不會讓確認框被圖片資訊視窗擋住。若取消，會恢復原圖片資訊。
+      const detailId = detailDialog.open && valid.includes(currentDetailId)
+        ? currentDetailId : null;
+      deleteBusy = true;
+      renderGallery();
+      renderBatch();
+      $("detailRemove").disabled = true;
+      if (detailId) {
+        detailDialog.close();
+        currentDetailId = null;
+      }
+
       try {
-        const deleted = await app.deleteImages(valid);
-        deleted.forEach(id => batchSelection.delete(id));
-        renderBatch();
-        if (currentDetailId && deleted.includes(currentDetailId)) { detailDialog.close(); currentDetailId = null; }
-        notify(`已刪除 ${deleted.length} 張圖片`);
+        const confirmed = await global.SlowlyConfirm.show({
+          title: `永久刪除 ${valid.length} 張圖片？`,
+          message: "刪除後無法復原，文章中正在使用的圖片也會失效。",
+          confirmText: "永久刪除", cancelText: "取消", className: "sbs-img-confirm"
+        });
+        if (!confirmed) return;
+
+        const result = await app.deleteImages(valid);
+        result.deleted.forEach(id => batchSelection.delete(id));
+        if (result.deleted.length) notify(`已刪除 ${result.deleted.length} 張圖片`);
+
+        if (result.failed.length) {
+          const examples = result.failed.slice(0, 3)
+            .map(item => `${item.name}：${item.message}`).join("；");
+          const more = result.failed.length > 3 ? "；其餘請重試" : "";
+          feedback(`有 ${result.failed.length} 張刪除失敗（其餘成功的不會重複刪除）：${examples}${more}`);
+        } else {
+          feedback("");
+        }
       } catch (error) {
-        feedback(`刪除失敗：${error.message}。清單正在重新整理。`);
-        await app.refreshImages().catch(refreshError => feedback(`圖片庫重新整理失敗：${refreshError.message}`));
+        feedback(`刪除操作失敗：${error.message}。請重新整理圖片庫，確認實際結果。`);
+      } finally {
+        deleteBusy = false;
+        // 刪除失敗或取消時，保留尚存在的圖片與批次選取紀錄。
+        for (const id of batchSelection) {
+          if (!app.itemById(id)) batchSelection.delete(id);
+        }
+        renderGallery();
+        renderBatch();
+        if (detailId && app.itemById(detailId)) openDetail(detailId);
+        else $("detailRemove").disabled = false;
       }
     }
 
@@ -479,7 +528,7 @@
       try {
         const result = await app.chooseFiles(event.target.files);
         renderUploadedResults([]);
-        if (result.rejected) notify(`未加入 ${result.rejected} 張（僅支援 JPG、PNG、WebP、GIF，單張最多 20 MB）`);
+        if (result.rejected) notify(`未加入 ${result.rejected} 張（格式未辨識、檔案為空、超過 20 MB 或單次超過 20 張）`);
         else if (result.selected) notify(`已選擇 ${result.selected} 張`);
       } catch (error) { feedback(`預覽失敗：${error.message}`); }
     });

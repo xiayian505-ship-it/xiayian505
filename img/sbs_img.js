@@ -12,7 +12,44 @@
     "bd126b9b-aa23-42e0-85f5-4560cab8fc57",
     "7348ca2f-147d-4a3b-b9d2-a854c4a12430"
   ]);
-  const SUPPORTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+  // 只接受圖片格式；瀏覽器無法辨識 MIME 的 RAW 等格式由副檔名補判斷。
+  // 原始 File 直接上傳，不經縮圖工具修改。
+  const IMAGE_EXTENSIONS = new Set([
+    "jpg", "jpeg", "jpe", "png", "apng", "gif", "webp", "avif", "svg", "svgz",
+    "bmp", "dib", "ico", "cur", "tif", "tiff", "heic", "heif", "hif", "jxl",
+    "jp2", "j2k", "jpf", "jpx", "psd", "psb", "tga", "dds", "exr", "hdr",
+    "icns", "qoi", "ppm", "pgm", "pbm", "pnm", "pam", "xbm", "xpm",
+    "dng", "cr2", "cr3", "crw", "nef", "nrw", "arw", "srf", "sr2",
+    "raf", "orf", "rw2", "rwl", "pef", "srw", "3fr", "fff", "iiq",
+    "k25", "kdc", "mos", "mrw", "mef", "erf", "bay", "cap", "eip",
+    "raw", "r3d"
+  ]);
+  const EXTENSION_MIME = new Map([
+    ["svg", "image/svg+xml"], ["svgz", "image/svg+xml"],
+    ["heic", "image/heic"], ["heif", "image/heif"], ["hif", "image/heif"],
+    ["avif", "image/avif"], ["jxl", "image/jxl"], ["ico", "image/x-icon"],
+    ["tif", "image/tiff"], ["tiff", "image/tiff"], ["bmp", "image/bmp"],
+    ["dng", "image/x-adobe-dng"], ["cr2", "image/x-canon-cr2"],
+    ["nef", "image/x-nikon-nef"], ["arw", "image/x-sony-arw"]
+  ]);
+  function imageExtension(name) {
+    const match = /\.([a-z0-9]+)$/i.exec(String(name || ""));
+    return match ? match[1].toLowerCase() : "";
+  }
+  function imageMime(file) {
+    const mime = String(file.type || "").toLowerCase().split(";")[0];
+    const ext = imageExtension(file.name);
+    if (!IMAGE_EXTENSIONS.has(ext)) return null;
+    // 對空白或通用 MIME 使用副檔名；其餘只接受 image/*。
+    // 避免把 text/html、application/javascript 等偽裝檔案當圖片上傳。
+    if (mime && mime !== "application/octet-stream" && !mime.startsWith("image/")) return null;
+    return mime.startsWith("image/") ? mime : (EXTENSION_MIME.get(ext) || "application/octet-stream");
+  }
+  function canCreateThumbnail(file) {
+    // 瀏覽器解碼支援不一致；這些格式嘗試縮圖常造成白圖或錯誤。
+    // SVG 是主動內容格式，原檔保留但不送往 Canvas。
+    return new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/bmp"]).has(file.type);
+  }
   const PAGE_SIZE = 8;
   const PREVIEW_CAP = 20;
   const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -59,6 +96,7 @@
     let session = null;
     let ready = false;
     let uploading = false;
+    let deleting = false;
     let previewVersion = 0;
     let refreshVersion = 0;
     let activeRefresh = null;
@@ -75,8 +113,20 @@
     function list(options = {}) {
       if (!ready) return { data: [], totalItems: 0, page: 1, totalPages: 1, hasPrevious: false, hasNext: false };
       let rows = global.FictionSearch.search(all(), String(options.keyword || "").trim(), ["name", "originalName"]);
+      const selectedType = options.type || "all";
+      const knownTypes = new Set(["jpg", "png", "webp", "gif", "svg", "avif", "heic", "heif", "tiff", "bmp", "ico", "dng", "raw"]);
+      if (selectedType !== "all") {
+        rows = rows.filter(item => {
+          const type = item.type.toLowerCase();
+          const extension = imageExtension(item.originalName || item.key);
+          const matched = selectedType === "jpg" ? ["jpg", "jpeg", "jpe"].includes(extension) :
+            selectedType === "tiff" ? ["tiff", "tif"].includes(extension) :
+            selectedType === "raw" ? ["raw", "cr2", "cr3", "nef", "arw", "raf", "rw2", "orf", "pef", "srw", "3fr", "dng"].includes(extension) :
+            extension === selectedType || type === selectedType;
+          return selectedType === "other" ? !knownTypes.has(extension) && !["jpeg", "jpe", "tif"].includes(extension) : matched;
+        });
+      }
       rows = global.FictionFilter.filter(rows, {
-        equals: { type: options.type && options.type !== "all" ? options.type : null },
         boolean: { favorite: options.favoriteOnly ? true : null }
       });
       let sort = { field: "createdAt", direction: "desc", type: "date" };
@@ -107,7 +157,7 @@
     async function chooseFiles(fileList) {
       if (uploading) throw new Error("圖片正在上傳，請稍候。");
       const files = Array.from(fileList || []);
-      const valid = files.filter(file => SUPPORTED_TYPES.has(file.type) && file.size > 0 && file.size <= MAX_IMAGE_BYTES);
+      const valid = files.filter(file => imageMime(file) && file.size > 0 && file.size <= MAX_IMAGE_BYTES);
       const accepted = valid.slice(0, PREVIEW_CAP);
       const rejected = files.length - accepted.length;
       discardPending();
@@ -116,13 +166,13 @@
         if (version !== previewVersion) break;
         const originalUrl = URL.createObjectURL(file);
         const draft = {
-          id: `local:${version}:${index}`, file, name: file.name, displayName: "", type: file.type,
+          id: `local:${version}:${index}`, file, name: file.name, displayName: "", type: imageMime(file),
           size: file.size, originalUrl, thumbUrl: originalUrl, thumbBlob: null,
-          thumbSize: null, thumbState: file.type === "image/gif" ? "gif" : "processing"
+          thumbSize: null, thumbState: canCreateThumbnail(file) ? "processing" : "unavailable"
         };
         pending.push(draft);
         emit("pending-added");
-        if (file.type === "image/gif") continue;
+        if (!canCreateThumbnail(file)) continue;
         try {
           const result = await global.ImageCompressToSize.compress(file, {
             maxBytes: 150 * 1024, maxWidth: 600, maxHeight: 600, type: "image/webp"
@@ -340,21 +390,60 @@
     }
     async function deleteImages(ids) {
       if (!session) throw new Error("請先登入管理員。");
+      if (uploading) throw new Error("圖片正在上傳，請稍候。");
+      if (deleting) throw new Error("已有刪除操作正在進行。");
+
       const unique = [...new Set(ids)].filter(id => itemById(id));
-      const deleted = [];
-      for (const id of unique) {
-        await apiFetch(`/images?key=${encodeURIComponent(id)}`, { method: "DELETE" });
-        images = images.filter(item => item.id !== id);
-        favorites.delete(id);
-        await favoriteCollection.remove(id);
-        deleted.push(id);
-        emit("deleted", { id });
+      const result = { deleted: [], failed: [] };
+      if (!unique.length) return result;
+
+      deleting = true;
+      // 讓刪除前開始的清單讀取失效，避免舊資料重新顯示已刪除的圖片。
+      refreshVersion++;
+      activeRefresh = null;
+      emit("delete-started", { count: unique.length });
+
+      try {
+        for (const id of unique) {
+          const item = itemById(id);
+          if (!item) continue;
+
+          try {
+            // 刪除 API 要的是 R2 key，不是前端產生的圖片 id。
+            await apiFetch(`/images?key=${encodeURIComponent(item.key)}`, {
+              method: "DELETE"
+            });
+          } catch (error) {
+            // 單張失敗不影響其他圖片，保留原本的圖片及選取狀態。
+            result.failed.push({ id, name: item.name, message: error.message });
+            continue;
+          }
+
+          images = images.filter(image => image.id !== id);
+          favorites.delete(id);
+          result.deleted.push(id);
+          emit("deleted", { id });
+
+          // R2 已刪除成功；本機收藏移除失敗不能當作圖片刪除失敗。
+          try {
+            await favoriteCollection.remove(id);
+          } catch (error) {
+            console.warn("圖片已刪除，但本機收藏紀錄清除失敗：", error);
+          }
+        }
+      } finally {
+        deleting = false;
+        emit("delete-finished", {
+          deletedCount: result.deleted.length,
+          failedCount: result.failed.length
+        });
       }
-      return deleted;
+
+      return result;
     }
     return Object.freeze({
       version: "2.1.0-r2-names", IMAGE_BASE, PAGE_SIZE, MAX_IMAGE_BYTES,
-      init, initAuth, login, logout, isAdmin: () => !!session, isUploading: () => uploading,
+      init, initAuth, login, logout, isAdmin: () => !!session, isUploading: () => uploading, isDeleting: () => deleting,
       formatSize, list, all, itemById, refreshImages, uploadPending, deleteImages, renameImage,
       getBucketUsage, getOperationsUsage,
       pending: () => [...pending], chooseFiles, discardPending, removePending, setPendingName,
