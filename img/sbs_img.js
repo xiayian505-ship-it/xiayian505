@@ -257,12 +257,46 @@
         throw new Error("登入已過期，請重新登入。");
       }
       const headers = new Headers(options.headers || {});
-      headers.set("Authorization", `Bearer ${data.session.access_token}`);
-      const response = await fetch(API_BASE + path, { ...options, headers, mode: "cors", cache: "no-store" });
-      let payload;
-      try { payload = await response.json(); }
-      catch { throw new Error(`圖片 API 回應異常（HTTP ${response.status}）。`); }
-      if (!response.ok) throw new Error(payload.error || `R2 操作失敗（HTTP ${response.status}）。`);
+      const bearer = `Bearer ${data.session.access_token}`;
+      headers.set("Authorization", bearer);
+      // 先使用原本的標準標頭，保持與現有舊版後端相容。
+      // 只有新版後端明確回覆 missing_token 才改用額外標頭重試。
+      async function sendImageApi(requestHeaders) {
+        try {
+          return await fetch(API_BASE + path, {
+            ...options,
+            headers: requestHeaders,
+            mode: "cors",
+            cache: "no-store"
+          });
+        } catch {
+          throw new Error("無法連線到圖片 API，請檢查 Cloudflare 網址或跨網域設定。");
+        }
+      }
+      async function parseImageApiResponse(response) {
+        try {
+          return await response.json();
+        } catch {
+          throw new Error(`圖片 API 回應異常（HTTP ${response.status}）。`);
+        }
+      }
+      let response = await sendImageApi(headers);
+      let payload = await parseImageApiResponse(response);
+
+      if (response.status === 401 && payload?.code === "missing_token") {
+        const retryHeaders = new Headers(headers);
+        retryHeaders.set("X-SBS-Auth", bearer);
+        response = await sendImageApi(retryHeaders);
+        payload = await parseImageApiResponse(response);
+      }
+
+      if (!response.ok) {
+        // 不顯示 JWT、密碼等私密值，只呈現後端的安全錯誤代碼。
+        const code = typeof payload?.code === "string" ? payload.code : "";
+        const upstream = Number.isInteger(payload?.upstreamStatus) ? `，Supabase HTTP ${payload.upstreamStatus}` : "";
+        const detail = code ? `（${code}，HTTP ${response.status}${upstream}）` : `（HTTP ${response.status}）`;
+        throw new Error(`${payload?.error || "R2 操作失敗。"}${detail}`);
+      }
       return payload;
     }
     async function getBucketUsage(onProgress) {

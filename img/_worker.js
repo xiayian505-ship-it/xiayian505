@@ -1,4 +1,4 @@
-/* SBS IMG Gateway | Cloudflare Pages advanced mode | 2026-10-26 rebuild 2.
+/* SBS IMG Gateway | Cloudflare Pages advanced mode | 2026-10-26 auth patch v3.
  * Reconstructed from the frontend API and existing R2 object layout.
  * Original backend source is unavailable. This is not a copy of the original.
  * Deploy only after checking the diagnostic endpoint on a preview deployment.
@@ -23,7 +23,7 @@ const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_THUMB_BYTES = 1024 * 1024;
 const CORS = { 'Access-Control-Allow-Origin':'*',
   'Access-Control-Allow-Methods':'GET,POST,PATCH,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers':'Authorization,Content-Type,X-Image-Name,X-Image-Title',
+  'Access-Control-Allow-Headers':'Authorization,X-SBS-Auth,Content-Type,X-Image-Name,X-Image-Title',
   };
 function json(value, status=200) { return new Response(JSON.stringify(value), {status, headers:{...CORS,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}}); }
 function fail(message, status=400) { return json({error:message},status); }
@@ -44,34 +44,78 @@ function imageRecord(request,item,displayName=null) {
     createdAt:item.uploaded?.toISOString?.() || new Date().toISOString(),
     url:imageUrl(request,key),thumbnailUrl:null};
 }
+/*
+ * Authenticate every private route on the server. Do not trust client-side UID checks.
+ * Prefer the standard Bearer header. A duplicate token in X-SBS-Auth provides a
+ * documented fallback if an upstream proxy omits Authorization; both are always
+ * verified by the same Supabase Auth endpoint. Never log either raw header.
+ */
 async function authorize(request) {
-  const match = /^Bearer\s+(.+)$/i.exec(request.headers.get('Authorization') || '');
-  if (!match) return { ok: false, reason: 'missing_token' };
+  const primary = request.headers.get('Authorization') || '';
+  const secondary = request.headers.get('X-SBS-Auth') || '';
+  const bearerValue = primary.trim() || secondary.trim();
+  if (!bearerValue) return { ok: false, reason: 'missing_token' };
 
+  const match = /^Bearer\s+(\S+)$/i.exec(bearerValue);
+  if (!match) return { ok: false, reason: 'invalid_authorization_header' };
+
+  const jwt = match[1];
+  if (jwt.split('.').length !== 3) {
+    return { ok: false, reason: 'invalid_token_format' };
+  }
+
+  // Supabase documents this endpoint for verifying projects with HS256 JWTs.
+  // The publishable key identifies the application; the user JWT identifies
+  // the person. Neither the public key nor a decoded, unverified JWT alone
+  // grants administrator privileges.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
   try {
     const response = await fetch(`${AUTH_URL}/auth/v1/user`, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${match[1]}`,
         apikey: AUTH_PUBLIC_KEY,
+        Authorization: `Bearer ${jwt}`,
         Accept: 'application/json'
       },
-      redirect: 'error'
+      signal: controller.signal,
+      redirect: 'error',
+      cache: 'no-store'
     });
 
     if (!response.ok) {
-      console.error('SBS IMG auth upstream status:', response.status);
-      return { ok: false, reason: 'upstream_auth_rejected' };
+      console.warn('SBS IMG Supabase Auth HTTP status:', response.status);
+      return {
+        ok: false,
+        reason: response.status === 401 || response.status === 403
+          ? 'upstream_auth_rejected'
+          : 'upstream_http_error',
+        upstreamStatus: response.status
+      };
     }
 
-    const user = await response.json();
-    if (!user || !user.id) return { ok: false, reason: 'invalid_user_response' };
-    if (!ADMIN_UIDS.has(user.id)) return { ok: false, reason: 'not_admin' };
+    let user;
+    try {
+      user = await response.json();
+    } catch {
+      return { ok: false, reason: 'invalid_user_response' };
+    }
+    if (!user || typeof user.id !== 'string') {
+      return { ok: false, reason: 'invalid_user_response' };
+    }
+    if (!ADMIN_UIDS.has(user.id)) {
+      return { ok: false, reason: 'not_admin' };
+    }
 
     return { ok: true };
   } catch (error) {
-    console.error('SBS IMG auth upstream error:', String(error));
-    return { ok: false, reason: 'upstream_unavailable' };
+    console.error('SBS IMG Supabase Auth request failed:', error?.name || 'unknown');
+    return {
+      ok: false,
+      reason: error?.name === 'AbortError' ? 'upstream_timeout' : 'upstream_unavailable'
+    };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -178,19 +222,29 @@ async function route(request,env){
   if (url.pathname === '/_sbs_gateway_health' && request.method === 'GET') {
     return json({
       status: bucket ? 'ok' : 'binding-missing',
-      build: 'sbs-img-rebuild-2-20261026',
+      build: 'sbs-img-auth-v3-20261026',
       r2Binding: Boolean(bucket),
-      auth: 'not-tested'
+      auth: 'requires-bearer'
     }, bucket ? 200 : 503);
   }
   if(url.pathname==='/_manage'||url.pathname.startsWith('/_manage/')) {
     const authorization = await authorize(request);
     if (!authorization.ok) {
-      const status = authorization.reason === 'upstream_unavailable' ? 503 : 401;
-      return json({error:'管理員驗證失敗。',code:authorization.reason},status);
+      const serviceError = new Set(['upstream_unavailable', 'upstream_timeout', 'upstream_http_error']);
+      const status = serviceError.has(authorization.reason) ? 503 : 401;
+      // Return a safe error code and HTTP status, never the access token.
+      return json({
+        error: '管理員驗證失敗。',
+        code: authorization.reason,
+        ...(authorization.upstreamStatus ? { upstreamStatus: authorization.upstreamStatus } : {})
+      }, status);
     }
     if (!bucket) return fail('R2 binding SBS_IMAGES 未設定。',503);
     const path=url.pathname.slice('/_manage'.length);
+    // A protected, read-only check for confirming actual token verification.
+    if (path === '/auth-check' && request.method === 'GET') {
+      return json({ authorized: true, build: 'sbs-img-auth-v3-20261026' });
+    }
     const key=url.searchParams.get('key')||'';
     try {
       if(path==='/images') {
