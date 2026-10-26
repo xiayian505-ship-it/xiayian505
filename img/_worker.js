@@ -1,6 +1,7 @@
-/* SBS IMG Gateway | Cloudflare Pages advanced mode | readable backup edition.
- * The original deployed source was unavailable. This is a compatible reconstruction,
- * not a byte-for-byte copy. Do not overwrite a production deployment without testing.
+/* SBS IMG Gateway | Cloudflare Pages advanced mode | 2026-10-26 rebuild 2.
+ * Reconstructed from the frontend API and existing R2 object layout.
+ * Original backend source is unavailable. This is not a copy of the original.
+ * Deploy only after checking the diagnostic endpoint on a preview deployment.
  */
 const AUTH_URL = 'https://bkjqaetxwvcdciieevvs.supabase.co';
 const AUTH_PUBLIC_KEY = 'sb_publishable_dAHoIimWgbGAF2wtIVSZfg_V8rzc200';
@@ -32,7 +33,8 @@ function safeName(value) { return String(value||'').normalize('NFC').replace(/[\
 function goodTitle(value) { const title=String(value??'').normalize('NFC').trim(); return Array.from(title).length<=80 && !/[\x00-\x1f\x7f]/.test(title); }
 function isOriginal(key) { return /^images\/\d{4}\/\d{2}\/[^/]+$/.test(key) && !key.includes('..'); }
 function thumbnailKey(key) { return `thumbs/${key}.webp`; }
-function imageUrl(request,key) { return new URL('/'+key.split('/').map(encodeURIComponent).join('/'),request.url).toString(); }
+const PUBLIC_IMAGE_BASE = 'https://img.stillnessbyslowly.com/';
+function imageUrl(_request,key) { return PUBLIC_IMAGE_BASE + key.split('/').map(encodeURIComponent).join('/'); }
 function imageRecord(request,item,displayName=null) {
   const key=item.key;
   const orig=item.customMetadata?.originalName || key.split('/').at(-1).replace(/^[0-9a-f-]{36}_/i,'');
@@ -43,16 +45,36 @@ function imageRecord(request,item,displayName=null) {
     url:imageUrl(request,key),thumbnailUrl:null};
 }
 async function authorize(request) {
-  const match=/^Bearer\s+(.+)$/i.exec(request.headers.get('Authorization')||'');
-  if (!match) return false;
+  const match = /^Bearer\s+(.+)$/i.exec(request.headers.get('Authorization') || '');
+  if (!match) return { ok: false, reason: 'missing_token' };
+
   try {
-    // Supabase Auth validates the access token; never trust only a decoded JWT payload.
-    const response=await fetch(`${AUTH_URL}/auth/v1/user`, {headers:{Authorization:`Bearer ${match[1]}`,apikey:AUTH_PUBLIC_KEY},redirect:'error'});
-    if (!response.ok) return false;
-    const user=await response.json();
-    return Boolean(user?.id && ADMIN_UIDS.has(user.id));
-  } catch { return false; }
+    const response = await fetch(`${AUTH_URL}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${match[1]}`,
+        apikey: AUTH_PUBLIC_KEY,
+        Accept: 'application/json'
+      },
+      redirect: 'error'
+    });
+
+    if (!response.ok) {
+      console.error('SBS IMG auth upstream status:', response.status);
+      return { ok: false, reason: 'upstream_auth_rejected' };
+    }
+
+    const user = await response.json();
+    if (!user || !user.id) return { ok: false, reason: 'invalid_user_response' };
+    if (!ADMIN_UIDS.has(user.id)) return { ok: false, reason: 'not_admin' };
+
+    return { ok: true };
+  } catch (error) {
+    console.error('SBS IMG auth upstream error:', String(error));
+    return { ok: false, reason: 'upstream_unavailable' };
+  }
 }
+
 async function readNames(bucket) {
   const object=await bucket.get(NAME_INDEX_KEY);
   if (!object) return {};
@@ -153,9 +175,21 @@ async function route(request,env){
   const url=new URL(request.url);
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:CORS});
   const bucket=env.SBS_IMAGES;
-  if(!bucket)return fail('R2 binding SBS_IMAGES 未設定。',503);
+  if (url.pathname === '/_sbs_gateway_health' && request.method === 'GET') {
+    return json({
+      status: bucket ? 'ok' : 'binding-missing',
+      build: 'sbs-img-rebuild-2-20261026',
+      r2Binding: Boolean(bucket),
+      auth: 'not-tested'
+    }, bucket ? 200 : 503);
+  }
   if(url.pathname==='/_manage'||url.pathname.startsWith('/_manage/')) {
-    if(!(await authorize(request)))return fail('管理員驗證失敗。',401);
+    const authorization = await authorize(request);
+    if (!authorization.ok) {
+      const status = authorization.reason === 'upstream_unavailable' ? 503 : 401;
+      return json({error:'管理員驗證失敗。',code:authorization.reason},status);
+    }
+    if (!bucket) return fail('R2 binding SBS_IMAGES 未設定。',503);
     const path=url.pathname.slice('/_manage'.length);
     const key=url.searchParams.get('key')||'';
     try {
@@ -167,17 +201,19 @@ async function route(request,env){
       }
       if(path==='/thumbnails'&&request.method==='POST')return thumbnailsPost(request,bucket,key);
       if(path==='/usage'&&request.method==='GET')return usage(bucket);
-      if(path==='/usage/operations'&&request.method==='GET')return json({status:'not-configured',missingConfig:['CF_ACCOUNT_ID','CF_ANALYTICS_TOKEN']});
+      if(path==='/usage/operations'&&request.method==='GET')return json({status:'not-configured',missingConfig:[]});
       return fail('找不到管理功能。',404);
     } catch(error) {console.error('SBS IMG API:',error);return fail('圖片操作失敗，請稍後再試。',500);}
   }
   // Direct original asset and thumbnail retrieval. SVG is served as an attachment
   // to prevent uploaded active content from executing on the image domain.
-  if(request.method==='GET'||request.method==='HEAD'){
+  if((request.method==='GET'||request.method==='HEAD') && bucket){
     let key;
     try { key=decodeURIComponent(url.pathname.slice(1)); } catch { return fail('圖片網址編碼錯誤。',400); }
     if(key.startsWith('images/')||key.startsWith('thumbs/')){
-      const object=await bucket.get(key);
+      let object;
+      try { object=await bucket.get(key); }
+      catch (error) { console.error('SBS IMG read error:',String(error)); return fail('圖片讀取發生錯誤。',500); }
       if(!object)return new Response('Not found',{status:404,headers:CORS});
       const h=new Headers();object.writeHttpMetadata(h);
       h.set('ETag',object.httpEtag);

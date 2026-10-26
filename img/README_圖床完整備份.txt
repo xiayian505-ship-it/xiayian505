@@ -1,35 +1,30 @@
-SBS 圖床｜前端＋後端原始碼備份（2026-10-26）
-================================================
-此版本根據已保存的前端、R2 物件結構和名稱索引重建後端，並非原始部署檔案。
-尚未部署 Cloudflare 正式站，也未經正式環境操作驗證。
+SBS 圖床後端重建版 2｜備份與部署說明
 
-【GitHub 備份】
-可將 img/ 資料夾內容覆蓋到原本 GitHub repository 的 img/ 資料夾，再 commit + push。
-img/_worker.js 是「後端原始碼備份」，GitHub Pages 不會執行它。
+這是從前端 API 與 Cloudflare R2 物件結構重新製作的後端，不是原始後端的完整取回。
 
-【Cloudflare Pages 網頁部署】
-請用另附 sbs_img_cloudflare_pages_deploy_20261026.zip；該 ZIP 的 _worker.js 放在根目錄。
-Cloudflare Pages 專案：sbs-img-gateway
-R2 Binding：SBS_IMAGES → sbs-img
-既有正式網域：https://img.stillnessbyslowly.com/
+GitHub 備份版：img/_worker.js 與 img/ 前端檔案一起保存。
+Cloudflare 上傳版：_worker.js 放在 ZIP 最外層，另有 index.html。
+請勿把 GitHub 備份 ZIP 直接當 Cloudflare Pages 的部署壓縮檔。
 
-【已包含】
-- 原圖儲存（不修改圖片二進位內容），多種圖片格式上傳，獨立 WebP 縮圖
-- Supabase Auth 管理員驗證、圖片清單、圖片網址、圖片顯示名稱修改、刪除
-- 圖片容量統計，保留舊的原圖及縮圖路徑規則、名稱索引格式
-- GitHub 前端仍使用正式 API https://img.stillnessbyslowly.com/_manage
+已實作：
+- Supabase Auth /auth/v1/user 登入權限驗證（只接受原本的管理員 UID）。
+- 原圖取得、原始檔案上傳、WebP 縮圖、清單、重新命名、刪除、容量統計。
+- 舊圖物件 Key 和 thumbs/images/...webp、_sbs_img/image_names_v1.json 格式。
+- /_sbs_gateway_health 公開健康檢查（只回傳版本、R2 綁定狀態）。
+- 驗證失敗時，API 會回傳 code 區分 token 缺失、驗證服務錯誤、非管理員。
 
-【操作統計】
-- A／B 類操作 API 暫回傳 status:not-configured。前端顯示警示，但其他管理功能不受影響。
-- R2 物件容量統計可使用；不代表能重算歷史操作次數。
+未實作：R2 A/B 操作統計，/_manage/usage/operations 會回傳 not-configured。
 
-【上線前的提醒】
-- 新後端為相容性重建，並非完整取回舊版；所有線上登入、上傳、刪除尚未實際驗證。
-- 請保留 Pages 舊部署，必要時可 Rollback；Rollback 無法復原已改寫或刪除的 R2 物件。
-- 若網站遭部署覆蓋，原本 Pages 的靜態主頁可能被部署 ZIP 的簡單狀態頁替換；圖床前端位於 GitHub 的 img/。
-- 目前不依賴 Cloudflare Analytics Token；程式碼內只使用 Supabase 的公開 publishable key。
-- 不要把 Cloudflare Secret 值提交到 GitHub。
+離線測試：
+node --check 檢查 JS 語法；以模擬 R2 測試上傳、縮圖、刪除、重新命名、圖片與容量清單、驗證失敗、診斷路由。
+尚未在 Cloudflare 正式 Pages 實際執行。舊版曾在正式環境出現登入可用、API 全部失效，
+因此離線通過並不能保證這一版實際運作正常。
 
-【離線模擬回歸測試】
-已通過：清單、縮圖、清除別名、原檔位元組保存、讀取、容量統計、刪除、未登入禁止管理、統計停用。
-沒有宣稱完成線上端到端測試。
+上線建議：使用另一個 Pages 測試部署／預覽環境並綁定測試 R2；
+先測 /_sbs_gateway_health，確認回傳 status:ok 和 r2Binding:true，
+再測登入圖片庫。不直接測試刪除真實圖片。
+
+正式 Pages 專案：sbs-img-gateway
+正式 R2 binding 名稱：SBS_IMAGES，儲存桶 sbs-img
+此套件不包含 Supabase 私密憑證，也不含 R2 圖片資料。
+並未對你的 Cloudflare 執行部署或變更任何資料。
