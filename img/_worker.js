@@ -79,9 +79,16 @@ async function authorize(request) {
         Accept: 'application/json'
       },
       signal: controller.signal,
-      redirect: 'error',
+      redirect: 'manual',
       cache: 'no-store'
     });
+
+    // Cloudflare Workers does not implement redirect: "error".
+    // Manual redirects are rejected explicitly to avoid forwarding JWTs.
+    if (response.status >= 300 && response.status < 400) {
+      console.warn('SBS IMG Supabase Auth unexpected redirect:', response.status);
+      return { ok: false, reason: 'upstream_redirect', upstreamStatus: response.status };
+    }
 
     if (!response.ok) {
       console.warn('SBS IMG Supabase Auth HTTP status:', response.status);
@@ -222,7 +229,7 @@ async function route(request,env){
   if (url.pathname === '/_sbs_gateway_health' && request.method === 'GET') {
     return json({
       status: bucket ? 'ok' : 'binding-missing',
-      build: 'sbs-img-auth-v3-20261026',
+      build: 'sbs-img-auth-v4-20261026',
       r2Binding: Boolean(bucket),
       auth: 'requires-bearer'
     }, bucket ? 200 : 503);
@@ -230,7 +237,7 @@ async function route(request,env){
   if(url.pathname==='/_manage'||url.pathname.startsWith('/_manage/')) {
     const authorization = await authorize(request);
     if (!authorization.ok) {
-      const serviceError = new Set(['upstream_unavailable', 'upstream_timeout', 'upstream_http_error']);
+      const serviceError = new Set(['upstream_unavailable', 'upstream_timeout', 'upstream_http_error', 'upstream_redirect']);
       const status = serviceError.has(authorization.reason) ? 503 : 401;
       // Return a safe error code and HTTP status, never the access token.
       return json({
@@ -243,7 +250,7 @@ async function route(request,env){
     const path=url.pathname.slice('/_manage'.length);
     // A protected, read-only check for confirming actual token verification.
     if (path === '/auth-check' && request.method === 'GET') {
-      return json({ authorized: true, build: 'sbs-img-auth-v3-20261026' });
+      return json({ authorized: true, build: 'sbs-img-auth-v4-20261026' });
     }
     const key=url.searchParams.get('key')||'';
     try {
