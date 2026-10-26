@@ -20,23 +20,23 @@ const MIME_BY_EXTENSION = {
 const NAME_INDEX_KEY = '_sbs_img/image_names_v1.json';
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_THUMB_BYTES = 1024 * 1024;
-const CORS = { 'Access-Control-Allow-Origin':'https://img.stillnessbyslowly.com',
+const CORS = { 'Access-Control-Allow-Origin':'*',
   'Access-Control-Allow-Methods':'GET,POST,PATCH,DELETE,OPTIONS',
   'Access-Control-Allow-Headers':'Authorization,Content-Type,X-Image-Name,X-Image-Title',
-  'Vary':'Origin' };
+  };
 function json(value, status=200) { return new Response(JSON.stringify(value), {status, headers:{...CORS,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}}); }
 function fail(message, status=400) { return json({error:message},status); }
 function decodeHeader(value) { try { return decodeURIComponent(value||''); } catch { return ''; } }
 function extension(name) { return String(name).split('.').pop().toLowerCase(); }
 function safeName(value) { return String(value||'').normalize('NFC').replace(/[\\/\x00-\x1f\x7f]/g,'_').trim().slice(0,160); }
 function goodTitle(value) { const title=String(value??'').normalize('NFC').trim(); return Array.from(title).length<=80 && !/[\x00-\x1f\x7f]/.test(title); }
-function isOriginal(key) { return key.startsWith('images/') && !key.includes('/thumbnails/') && !key.startsWith('thumbs/'); }
+function isOriginal(key) { return /^images\/\d{4}\/\d{2}\/[^/]+$/.test(key) && !key.includes('..'); }
 function thumbnailKey(key) { return `thumbs/${key}.webp`; }
 function imageUrl(request,key) { return new URL('/'+key.split('/').map(encodeURIComponent).join('/'),request.url).toString(); }
 function imageRecord(request,item,displayName=null) {
   const key=item.key;
   const orig=item.customMetadata?.originalName || key.split('/').at(-1).replace(/^[0-9a-f-]{36}_/i,'');
-  const title=displayName ?? item.customMetadata?.displayName ?? null;
+  const title=displayName === null ? (item.customMetadata?.displayName ?? null) : displayName;
   return {id:key,key,name:title||orig,originalName:orig,displayName:title||null,
     type:item.httpMetadata?.contentType||'application/octet-stream',size:item.size,
     createdAt:item.uploaded?.toISOString?.() || new Date().toISOString(),
@@ -62,7 +62,7 @@ async function readNames(bucket) {
 async function listAll(bucket,prefix='images/') {
   const objects=[]; let cursor; let count=0;
   do {
-    const page=await bucket.list({prefix,limit:1000,...(cursor?{cursor}:{})});
+    const page=await bucket.list({prefix,limit:1000,include:['httpMetadata','customMetadata'],...(cursor?{cursor}:{})});
     objects.push(...page.objects);
     cursor=page.truncated?page.cursor:undefined;
     if (++count>1000) throw new Error('Too many result pages');
@@ -96,7 +96,8 @@ async function imagesPost(request,bucket) {
   const now=new Date();
   const date=`${now.getUTCFullYear()}/${String(now.getUTCMonth()+1).padStart(2,'0')}`;
   const key=`images/${date}/${crypto.randomUUID()}_${originalName}`;
-  const contentType=mime && mime!=='application/octet-stream'?mime:(MIME_BY_EXTENSION[extension(originalName)]||'application/octet-stream');
+  // 副檔名優先決定已知格式；避免瀏覽器把 SVG 當成 text/plain 儲存。
+  const contentType=MIME_BY_EXTENSION[extension(originalName)] || (mime && mime!=='application/octet-stream'?mime:'application/octet-stream');
   await bucket.put(key,bytes,{httpMetadata:{contentType,cacheControl:'public, max-age=3600'},customMetadata:{originalName,...(displayName?{displayName}:{})}});
   return json({image:{key,url:imageUrl(request,key)}},201);
 }
@@ -106,11 +107,12 @@ async function imagesPatch(request,bucket,key) {
   if (!body || !goodTitle(body.displayName)) return fail('圖片名稱不合法。');
   const object=await bucket.get(key);
   if (!object) return fail('圖片不存在。',404);
-  const displayName=String(body.displayName).trim();
+  const displayName=String(body.displayName).normalize('NFC').trim();
   // The existing gateway stores display names in a shared JSON index.
   // Preserve original bytes and object metadata; update only the name index.
   const names=await readNames(bucket);
-  if (displayName) names[key]=displayName; else delete names[key];
+  // 空字串是明確『回復原始檔名』，不能刪掉索引項目：舊圖片 metadata 可能有 displayName。
+  names[key]=displayName;
   await bucket.put(NAME_INDEX_KEY,JSON.stringify({version:1,names}),
     {httpMetadata:{contentType:'application/json',cacheControl:'no-store'}});
   return json({image:imageRecord(request,object,displayName)});
@@ -152,7 +154,7 @@ async function route(request,env){
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:CORS});
   const bucket=env.SBS_IMAGES;
   if(!bucket)return fail('R2 binding SBS_IMAGES 未設定。',503);
-  if(url.pathname.startsWith('/_manage')) {
+  if(url.pathname==='/_manage'||url.pathname.startsWith('/_manage/')) {
     if(!(await authorize(request)))return fail('管理員驗證失敗。',401);
     const path=url.pathname.slice('/_manage'.length);
     const key=url.searchParams.get('key')||'';
@@ -172,14 +174,16 @@ async function route(request,env){
   // Direct original asset and thumbnail retrieval. SVG is served as an attachment
   // to prevent uploaded active content from executing on the image domain.
   if(request.method==='GET'||request.method==='HEAD'){
-    const key=decodeURIComponent(url.pathname.slice(1));
+    let key;
+    try { key=decodeURIComponent(url.pathname.slice(1)); } catch { return fail('圖片網址編碼錯誤。',400); }
     if(key.startsWith('images/')||key.startsWith('thumbs/')){
       const object=await bucket.get(key);
-      if(!object)return new Response('Not found',{status:404});
+      if(!object)return new Response('Not found',{status:404,headers:CORS});
       const h=new Headers();object.writeHttpMetadata(h);
       h.set('ETag',object.httpEtag);
       h.set('X-Content-Type-Options','nosniff');
-      if(/\.svgz?$/i.test(key))h.set('Content-Disposition','attachment');
+      h.set('Access-Control-Allow-Origin','*');
+      if(/\.svgz?$/i.test(key)){h.set('Content-Disposition','attachment');h.set('Content-Security-Policy',"sandbox; default-src 'none'");}
       return new Response(request.method==='HEAD'?null:object.body,{headers:h});
     }
   }
